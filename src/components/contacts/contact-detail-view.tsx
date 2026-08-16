@@ -566,7 +566,7 @@ export function ContactDetailView({
                               color: tag.color,
                             }}
                           >
-                            {selected && <Check className="size-3 mr-1" />}
+                            {selected && <Check className="size-3 me-1" />}
                             {tag.name}
                           </button>
                         );

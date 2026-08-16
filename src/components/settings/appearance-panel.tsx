@@ -1,12 +1,22 @@
 "use client";
 
-import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Check, Languages, Moon, Palette, SunMoon, Sun } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 
 import { useTheme } from "@/hooks/use-theme";
+import { SUPPORTED_LOCALES, type Locale } from "@/i18n/locale";
+import { setLocale } from "@/i18n/set-locale";
 import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
-import { useTranslations } from "next-intl";
 import { SettingsPanelHead } from "./settings-panel-head";
+
+/** Native endonyms — shown as-is regardless of the current UI locale. */
+const LOCALE_NAMES: Record<Locale, string> = {
+  en: "English",
+  ar: "العربية",
+};
 
 /**
  * Appearance panel — light/dark mode + accent-color picker.
@@ -73,7 +83,71 @@ export function AppearancePanel() {
           ))}
         </div>
       </div>
+
+      <div className="mt-8 space-y-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Languages className="size-4 text-muted-foreground" />
+          {t("language")}
+        </h3>
+
+        <div
+          role="radiogroup"
+          aria-label={t("language")}
+          className="grid max-w-md grid-cols-2 gap-3"
+        >
+          {SUPPORTED_LOCALES.map((code) => (
+            <LanguageCard key={code} code={code} />
+          ))}
+        </div>
+      </div>
     </section>
+  );
+}
+
+function LanguageCard({ code }: { code: Locale }) {
+  const locale = useLocale();
+  const t = useTranslations("Settings.appearance");
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [pendingCode, setPendingCode] = useState<Locale | null>(null);
+  const isActive = code === locale;
+  const name = LOCALE_NAMES[code];
+
+  function onPick() {
+    if (isActive || isPending) return;
+    setPendingCode(code);
+    startTransition(async () => {
+      await setLocale(code);
+      router.refresh();
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      role="radio"
+      onClick={onPick}
+      aria-checked={isActive}
+      aria-label={t("useLanguage", { name })}
+      disabled={isPending}
+      className={cn(
+        "flex items-center gap-3 rounded-lg border bg-card p-4 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        isActive
+          ? "border-primary/60 ring-2 ring-primary/40"
+          : "border-border hover:border-border hover:bg-muted/40",
+      )}
+    >
+      <span className="flex-1 text-sm font-semibold text-foreground">{name}</span>
+      {isActive && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+          <Check className="h-3 w-3" />
+          {t("active")}
+        </span>
+      )}
+      {isPending && pendingCode === code && (
+        <span className="text-[11px] text-muted-foreground">…</span>
+      )}
+    </button>
   );
 }
 
@@ -97,7 +171,7 @@ function ModeCard({
       aria-checked={isActive}
       aria-label={t("useMode", { mode })}
       className={cn(
-        "flex items-center gap-3 rounded-lg border bg-card p-4 text-left transition-colors",
+        "flex items-center gap-3 rounded-lg border bg-card p-4 text-start transition-colors",
         isActive
           ? "border-primary/60 ring-2 ring-primary/40"
           : "border-border hover:border-border hover:bg-muted/40",
@@ -145,7 +219,7 @@ function ThemeCard({
       aria-pressed={isActive}
       aria-label={t("useTheme", { name })}
       className={cn(
-        "flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors",
+        "flex flex-col gap-3 rounded-lg border bg-card p-4 text-start transition-colors",
         isActive
           ? "border-primary/60 ring-2 ring-primary/40"
           : "border-border hover:border-border hover:bg-muted/40",

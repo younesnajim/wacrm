@@ -42,3 +42,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase CLI local link state
+supabase/.temp
+
+# translate-catalogue.mjs resumability cache
+messages/.*.cache.json

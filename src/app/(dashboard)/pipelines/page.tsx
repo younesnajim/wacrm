@@ -348,7 +348,7 @@ export default function PipelinesPage() {
                       : "text-popover-foreground"
                   }
                 >
-                  <GitBranch className="mr-2 h-3.5 w-3.5" />
+                  <GitBranch className="me-2 h-3.5 w-3.5" />
                   {p.name}
                 </DropdownMenuItem>
               ))}
@@ -358,7 +358,7 @@ export default function PipelinesPage() {
                   onClick={() => setSettingsOpen(true)}
                   className="text-popover-foreground"
                 >
-                  <Settings className="mr-2 h-3.5 w-3.5" />
+                  <Settings className="me-2 h-3.5 w-3.5" />
                   {t("managePipelines")}
                 </DropdownMenuItem>
               )}
@@ -374,7 +374,7 @@ export default function PipelinesPage() {
             onClick={() => setNewPipelineOpen(true)}
             className="border-border bg-card text-foreground hover:bg-muted"
           >
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="me-1 h-4 w-4" />
             {t("addPipeline")}
           </GatedButton>
           <GatedButton
@@ -384,7 +384,7 @@ export default function PipelinesPage() {
             onClick={() => handleAddDeal()}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="me-1 h-4 w-4" />
             {t("addDeal")}
           </GatedButton>
         </div>
@@ -406,7 +406,7 @@ export default function PipelinesPage() {
             onClick={() => setNewPipelineOpen(true)}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="me-1 h-4 w-4" />
             {t("createPipeline")}
           </GatedButton>
         </div>

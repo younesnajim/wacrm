@@ -319,7 +319,7 @@ export function PipelineSettings({
                     disabled={!newStageName.trim()}
                     className="shrink-0 border-border bg-transparent text-muted-foreground hover:bg-muted"
                   >
-                    <Plus className="mr-1 h-3 w-3" />
+                    <Plus className="me-1 h-3 w-3" />
                     {t("add")}
                   </Button>
                 </div>
@@ -330,7 +330,7 @@ export function PipelineSettings({
                 onClick={onCreateNewPipeline}
                 className="w-full border-border bg-transparent text-muted-foreground hover:bg-muted"
               >
-                <Plus className="mr-1 h-3 w-3" />
+                <Plus className="me-1 h-3 w-3" />
                 {t("createNewPipeline")}
               </Button>
             </div>
@@ -447,7 +447,7 @@ function ColorSwatch({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-6 z-20 flex flex-wrap gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg w-36">
+          <div className="absolute start-0 top-6 z-20 flex flex-wrap gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg w-36">
             {colors.map((c) => (
               <button
                 key={c}

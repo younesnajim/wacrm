@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
-import { Inter } from "next/font/google";
+import { Inter, Tajawal } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+import { getDirection } from "@/lib/i18n/direction";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { ThemedToaster } from "@/components/themed-toaster";
 import {
@@ -18,6 +19,15 @@ import {
 const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
+});
+
+// Arabic UI face. Loaded only for RTL locales so LTR installs don't pay
+// for the extra font files. Falls through to Inter for Latin glyphs that
+// still appear in an Arabic UI (phone numbers, template variables, URLs).
+const tajawal = Tajawal({
+  variable: "--font-sans",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -84,13 +94,16 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const dir = getDirection(locale);
+  const font = dir === "rtl" ? tajawal : inter;
 
   return (
     <html
       lang={locale}
+      dir={dir}
       data-theme={DEFAULT_THEME}
       data-mode={DEFAULT_MODE}
-      className={`${inter.variable} h-full antialiased`}
+      className={`${font.variable} h-full antialiased`}
       // The `theme-boot` script below rewrites `data-theme` and
       // `data-mode` on <html> from localStorage before React hydrates,
       // so for any non-default choice the client DOM intentionally

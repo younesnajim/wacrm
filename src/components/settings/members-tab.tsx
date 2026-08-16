@@ -401,7 +401,7 @@ export function MembersTab() {
 
                   {/* Joined date stays desktop-only. The mobile row's
                       vertical density makes the joined date noise. */}
-                  <div className="hidden sm:block text-right text-xs text-muted-foreground">
+                  <div className="hidden sm:block text-end text-xs text-muted-foreground">
                     {t('joined', { date: fmtDate(member.joined_at) })}
                   </div>
 

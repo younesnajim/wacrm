@@ -130,7 +130,7 @@ export function QuickRepliesManager() {
         description="Reusable snippets — plain text or a saved interactive message — that agents can insert from the inbox composer."
         action={
           <Button onClick={openCreate}>
-            <Plus className="mr-1 h-4 w-4" />
+            <Plus className="me-1 h-4 w-4" />
             New quick reply
           </Button>
         }
@@ -230,7 +230,7 @@ export function QuickRepliesManager() {
               Cancel
             </Button>
             <Button onClick={save} disabled={saving}>
-              {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              {saving && <Loader2 className="me-1 h-4 w-4 animate-spin" />}
               Save
             </Button>
           </DialogFooter>

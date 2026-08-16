@@ -174,7 +174,7 @@ function Metric({
           >
             <Info className="h-3 w-3" />
           </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs text-left">
+          <TooltipContent side="top" className="max-w-xs text-start">
             {tooltip}
           </TooltipContent>
         </Tooltip>

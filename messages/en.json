@@ -1615,7 +1615,9 @@
       "useMode": "Use {mode} mode",
       "active": "Active",
       "accentColor": "Accent color",
-      "useTheme": "Use {name} theme"
+      "useTheme": "Use {name} theme",
+      "language": "Language",
+      "useLanguage": "Use {name}"
     },
     "security": {
       "title": "Login & security",

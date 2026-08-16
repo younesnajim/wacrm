@@ -102,7 +102,7 @@ export function EditorHeader() {
           >
             <History className="h-3.5 w-3.5" />
             Runs
-            <span className="ml-0.5 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            <span className="ms-0.5 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
               {flow.execution_count}
             </span>
           </Button>

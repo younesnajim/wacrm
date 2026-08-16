@@ -557,7 +557,7 @@ export function MessageComposer({
             className="h-7 text-xs text-amber-400 hover:text-amber-300"
             onClick={onOpenTemplates}
           >
-            <LayoutTemplate className="mr-1 h-3 w-3" />
+            <LayoutTemplate className="me-1 h-3 w-3" />
             {t("templates")}
           </Button>
         </div>
@@ -651,19 +651,19 @@ export function MessageComposer({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="border-border bg-popover">
               <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
-                <ImageIcon className="mr-2 h-4 w-4" />
+                <ImageIcon className="me-2 h-4 w-4" />
                 {t("photo")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
-                <Video className="mr-2 h-4 w-4" />
+                <Video className="me-2 h-4 w-4" />
                 {t("video")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-                <FileText className="mr-2 h-4 w-4" />
+                <FileText className="me-2 h-4 w-4" />
                 {t("document")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void startRecording()}>
-                <Mic className="mr-2 h-4 w-4" />
+                <Mic className="me-2 h-4 w-4" />
                 {t("voiceNote")}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -687,11 +687,11 @@ export function MessageComposer({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="border-border bg-popover">
               <DropdownMenuItem onClick={() => openInteractiveBuilder()}>
-                <MessageSquareDashed className="mr-2 h-4 w-4" />
+                <MessageSquareDashed className="me-2 h-4 w-4" />
                 {t("interactiveMessage")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setQuickReplyOpen(true)}>
-                <Zap className="mr-2 h-4 w-4" />
+                <Zap className="me-2 h-4 w-4" />
                 {t("quickReplies")}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -791,14 +791,14 @@ export function MessageComposer({
               onClick={saveAsQuickReply}
             >
               {savingQuickReply ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                <Loader2 className="me-1 h-4 w-4 animate-spin" />
               ) : (
-                <Zap className="mr-1 h-4 w-4" />
+                <Zap className="me-1 h-4 w-4" />
               )}
               {t("saveAsQuickReply")}
             </Button>
             <Button onClick={sendInteractive}>
-              <Send className="mr-1 h-4 w-4" />
+              <Send className="me-1 h-4 w-4" />
               {t("send")}
             </Button>
           </DialogFooter>

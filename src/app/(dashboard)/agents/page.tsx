@@ -57,14 +57,14 @@ export default function AgentsPage() {
         >
           <TabsList>
             <TabsTrigger value="playground">
-              <Sparkles className="mr-1.5 h-4 w-4" /> Playground
+              <Sparkles className="me-1.5 h-4 w-4" /> Playground
             </TabsTrigger>
             <TabsTrigger value="setup">
-              <Settings2 className="mr-1.5 h-4 w-4" /> Setup
+              <Settings2 className="me-1.5 h-4 w-4" /> Setup
             </TabsTrigger>
             {canViewUsage && (
               <TabsTrigger value="usage">
-                <BarChart3 className="mr-1.5 h-4 w-4" /> Usage
+                <BarChart3 className="me-1.5 h-4 w-4" /> Usage
               </TabsTrigger>
             )}
           </TabsList>

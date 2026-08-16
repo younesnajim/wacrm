@@ -172,7 +172,7 @@ export function AiKnowledgeCard({
       <CardContent className="space-y-4">
         {loading ? (
           <div className="flex items-center py-4 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('loading')}
+            <Loader2 className="me-2 h-4 w-4 animate-spin" /> {t('loading')}
           </div>
         ) : (
           <>
@@ -247,7 +247,7 @@ export function AiKnowledgeCard({
                     {t('cancel')}
                   </Button>
                   <Button onClick={save} disabled={saving}>
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                     {t('saveDoc')}
                   </Button>
                 </div>
@@ -256,7 +256,7 @@ export function AiKnowledgeCard({
               canEdit && (
                 <div className="flex items-center justify-between">
                   <Button variant="outline" size="sm" onClick={openNew}>
-                    <Plus className="mr-2 h-4 w-4" /> {t('addDoc')}
+                    <Plus className="me-2 h-4 w-4" /> {t('addDoc')}
                   </Button>
                   {hasEmbeddingsKey && docs.length > 0 && (
                     <Button
@@ -267,9 +267,9 @@ export function AiKnowledgeCard({
                       title={t('reindexTooltip')}
                     >
                       {reindexing ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="me-2 h-4 w-4 animate-spin" />
                       ) : (
-                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <RefreshCw className="me-2 h-4 w-4" />
                       )}
                       {t('reindex')}
                     </Button>

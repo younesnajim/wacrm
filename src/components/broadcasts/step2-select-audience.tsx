@@ -279,7 +279,7 @@ export function Step2SelectAudience({
                     option.type === 'csv' ? audience.csvContacts : undefined,
                 })
               }
-              className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
+              className={`flex items-start gap-3 rounded-xl border p-4 text-start transition-all ${
                 isSelected
                   ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                   : 'border-border bg-card/50 hover:border-border'
@@ -329,7 +329,7 @@ export function Step2SelectAudience({
                     }`}
                   >
                     <span
-                      className="mr-1.5 h-2 w-2 rounded-full"
+                      className="me-1.5 h-2 w-2 rounded-full"
                       style={{ backgroundColor: tag.color }}
                     />
                     {tag.name}
@@ -416,7 +416,7 @@ export function Step2SelectAudience({
                   }`}
                 >
                   <span
-                    className="mr-1.5 h-2 w-2 rounded-full"
+                    className="me-1.5 h-2 w-2 rounded-full"
                     style={{ backgroundColor: tag.color }}
                   />
                   {tag.name}

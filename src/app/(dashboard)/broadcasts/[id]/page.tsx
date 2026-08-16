@@ -101,7 +101,7 @@ function FunnelChart({ steps }: { steps: FunnelStep[] }) {
                 />
                 <span className="absolute inset-0 flex items-center px-3 text-xs font-medium text-foreground">
                   {step.value.toLocaleString()}
-                  <span className="ml-2 text-muted-foreground/80">
+                  <span className="ms-2 text-muted-foreground/80">
                     ({pctOfSent}%)
                   </span>
                 </span>

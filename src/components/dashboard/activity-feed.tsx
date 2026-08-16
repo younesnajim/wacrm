@@ -128,7 +128,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
               {t('showingOf', { visible: visible.length, totalLoaded, plus: totalLoaded === 50 ? '+' : '' })}
             </span>
             <div className="flex items-center gap-1">
-              <span className="mr-1 text-muted-foreground">{t('show')}</span>
+              <span className="me-1 text-muted-foreground">{t('show')}</span>
               {PAGE_SIZES.map((size, i) => {
                 const disabled = !isSizeUseful(size, i)
                 return (

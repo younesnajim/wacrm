@@ -32,7 +32,7 @@ export function ReplyQuote({
   return (
     <div
       className={cn(
-        "flex items-start gap-2 border-l-2 px-2 py-1",
+        "flex items-start gap-2 border-s-2 px-2 py-1",
         onPrimary ? "border-primary-foreground/50" : "border-primary",
         isChip
           ? "rounded-md bg-muted/80"

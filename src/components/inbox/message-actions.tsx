@@ -101,7 +101,7 @@ export function MessageActions({
           "absolute -top-3 z-10 flex h-7 items-center gap-0.5 rounded-full border border-border bg-popover/95 px-1 shadow-md backdrop-blur-sm transition-opacity",
           "opacity-0 group-hover/actions:opacity-100 group-focus-within/actions:opacity-100",
           "data-[touch-open=true]:opacity-100",
-          isAgent ? "right-3" : "left-3",
+          isAgent ? "end-3" : "start-3",
         )}
       >
         <Popover open={pickerOpen} onOpenChange={setPickerOpen}>

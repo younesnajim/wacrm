@@ -928,7 +928,7 @@ export function MessageThread({
           <Badge
             variant="outline"
             className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
+              "ms-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ms-2",
               sessionInfo.expired ? "text-red-400" : "text-primary"
             )}
           >
@@ -1052,13 +1052,13 @@ export function MessageThread({
                           getRow(p.user_id)?.last_seen_at ?? null,
                           now
                         )}
-                        className="mr-2"
+                        className="me-2"
                       />
                       <span className="flex-1">
                         {p.full_name}
                         {p.user_id === user?.id ? t("me") : ""}
                       </span>
-                      {isSelected && <Check className="ml-2 h-3 w-3" />}
+                      {isSelected && <Check className="ms-2 h-3 w-3" />}
                     </DropdownMenuItem>
                   );
                 })

@@ -239,7 +239,7 @@ function ButtonsEditor({
               placeholder="Button label"
               className="flex-1 bg-muted"
             />
-            <span className="w-10 shrink-0 text-right text-[10px] text-muted-foreground">
+            <span className="w-10 shrink-0 text-end text-[10px] text-muted-foreground">
               {b.title.length}/{INTERACTIVE_LIMITS.buttonTitleMaxLength}
             </span>
             {buttons.length > 1 && (
@@ -383,7 +383,7 @@ function ListEditor({
                     placeholder="Row title"
                     className="flex-1 bg-muted"
                   />
-                  <span className="w-10 shrink-0 text-right text-[10px] text-muted-foreground">
+                  <span className="w-10 shrink-0 text-end text-[10px] text-muted-foreground">
                     {row.title.length}/{INTERACTIVE_LIMITS.listRowTitleMaxLength}
                   </span>
                   {totalRows > 1 && (
