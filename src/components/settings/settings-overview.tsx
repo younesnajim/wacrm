@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { hasMinRole } from '@/lib/auth/roles';
 import { useTheme } from '@/hooks/use-theme';
 import { THEMES } from '@/lib/themes';
 import { CURRENCIES } from '@/lib/currency';
@@ -249,9 +250,18 @@ export function SettingsOverview({
         ) : null}
       </Card>
 
-      {/* Status tiles */}
+      {/* Status tiles — filtered by the same SECTION_META.minRole the
+          rail uses (settings-rail.tsx), so the two surfaces can't
+          drift apart again. Fails closed like the rail: no role yet
+          → nothing renders, rather than a flash of cards the caller
+          may not have access to. */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {tiles.map(({ section, loading, subtitle }) => {
+        {tiles
+          .filter(
+            ({ section }) =>
+              !!accountRole && hasMinRole(accountRole, SECTION_META[section].minRole),
+          )
+          .map(({ section, loading, subtitle }) => {
           const meta = SECTION_META[section];
           const Icon = meta.icon;
           return (

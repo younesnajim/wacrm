@@ -48,10 +48,12 @@ export async function POST(
   let claimedId: string | null = null;
 
   try {
-    // Same gate as the batch send endpoint: running a broadcast is a
-    // write, and viewers are read-only. Resuming is no different — it
-    // puts real messages on real phones.
-    const { supabase, accountId, userId } = await requireRole('agent');
+    // Same gate as the batch send endpoint: broadcasts are admin+ (see
+    // 046_pass2_permissions.sql). The fan-out below runs on a
+    // service-role client (`supabaseAdmin()`, bypasses RLS) — this
+    // requireRole call is the only gate on who can trigger it, not
+    // defense-in-depth on top of RLS.
+    const { supabase, accountId, userId } = await requireRole('admin');
 
     const limit = checkRateLimit(
       `broadcast-resume:${userId}`,

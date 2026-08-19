@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   deleteMessageTemplate,
@@ -56,28 +57,18 @@ export async function PATCH(
         { status: 400 },
       )
     }
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Resolve the caller's account_id so template + whatsapp_config
-    // lookups work for teammates who didn't author the row.
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('account_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    const accountId = profile?.account_id as string | undefined
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
+    // Admin+ — matches message_templates_update/delete RLS and the
+    // sibling submit/sync routes. RLS already backstops the writes
+    // below, but this gives a clean 403 instead of a bare constraint
+    // failure, and matches how every other admin-tier route reports it.
+    let accountId: string
+    let supabase: Awaited<ReturnType<typeof createClient>>
+    try {
+      const ctx = await requireRole('admin')
+      accountId = ctx.accountId
+      supabase = ctx.supabase
+    } catch (err) {
+      return toErrorResponse(err)
     }
 
     let payload: TemplatePayload
@@ -242,29 +233,15 @@ export async function DELETE(
         { status: 400 },
       )
     }
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Same account-scoping rationale as the PATCH handler above —
-    // teammates need to be able to operate on shared templates +
-    // the shared whatsapp_config.
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('account_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    const accountId = profile?.account_id as string | undefined
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
+    // Admin+ — same rationale as PATCH above.
+    let accountId: string
+    let supabase: Awaited<ReturnType<typeof createClient>>
+    try {
+      const ctx = await requireRole('admin')
+      accountId = ctx.accountId
+      supabase = ctx.supabase
+    } catch (err) {
+      return toErrorResponse(err)
     }
 
     const { data: existing, error: lookupErr } = await supabase

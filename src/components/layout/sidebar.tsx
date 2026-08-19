@@ -26,7 +26,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { AccountRole } from "@/lib/auth/roles";
+import { hasMinRole, type AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -96,6 +96,16 @@ interface NavItem {
    * blocks direct navigation.
    */
   ownerOnly?: boolean;
+  /**
+   * Minimum account role to see this row. Unlike `ownerOnly` (a fixed
+   * top-tier gate for build/operator surfaces), this is a general
+   * rank check — used for Broadcasts, which is admin+ (a bad send to
+   * thousands of contacts risks Meta quality-rating action against
+   * the client's WhatsApp number) but not owner-only. Also enforced
+   * server-side by `/broadcasts/layout.tsx` (RequireRole) and the
+   * broadcasts_* RLS policies.
+   */
+  minRole?: AccountRole;
 }
 
 const navItems: NavItem[] = [
@@ -104,7 +114,7 @@ const navItems: NavItem[] = [
   { href: "/notifications", labelKey: "notifications", icon: Bell },
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
+  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, minRole: "admin" },
   { href: "/automations", labelKey: "automations", icon: Zap, ownerOnly: true },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, ownerOnly: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot, ownerOnly: true },
@@ -219,6 +229,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <ul className="flex flex-col gap-1">
             {navItems
               .filter((item) => !item.ownerOnly || isOwner)
+              .filter(
+                (item) =>
+                  !item.minRole ||
+                  (!!accountRole && hasMinRole(accountRole, item.minRole)),
+              )
               .map((item) => {
               const isActive =
                 pathname === item.href ||
@@ -385,8 +400,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               </DropdownMenuItem>
               <DropdownMenuItem
                 render={
+                  // Plain `/settings` (Overview) rather than a hardcoded
+                  // tab — `?tab=whatsapp` is admin+ and would bounce a
+                  // non-admin straight back out via the panel's
+                  // RequireRole guard. Overview is viewer-safe for everyone.
                   <Link
-                    href="/settings?tab=whatsapp"
+                    href="/settings"
                     onClick={onClose}
                     className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
                   />

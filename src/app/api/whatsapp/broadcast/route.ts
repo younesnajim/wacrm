@@ -60,19 +60,18 @@ interface NewRecipient {
 
 export async function POST(request: Request) {
   try {
-    // Requires the 'agent' role — `canSendMessages` in lib/auth/roles is
-    // explicit that running broadcasts is a write operation and that
-    // viewers are read-only.
+    // Admin+ — broadcasts are an admin-only surface (a bad send to
+    // thousands of contacts is a Meta quality-rating incident that can
+    // get the client's WhatsApp number restricted; see the broadcasts_*
+    // RLS policies in 046_pass2_permissions.sql for the same threshold
+    // on the underlying table).
     //
     // This endpoint writes NOTHING to the database: it reads the config
     // and template, then calls Meta directly. So unlike the rest of the
-    // app there was no RLS policy backstopping a missing role check —
-    // resolving `account_id` straight off the profile (which only needs
-    // 'viewer') was the ONLY gate, and it let a viewer blast a template
-    // to arbitrary phone numbers from the account's WhatsApp number.
-    // Nothing about that is recoverable after the fact, so the check has
-    // to happen here.
-    const { supabase, accountId, userId } = await requireRole('agent')
+    // app there is no RLS policy backstopping a missing role check —
+    // resolving `account_id` straight off the profile was the ONLY gate.
+    // requireRole here is load-bearing, not defense-in-depth.
+    const { supabase, accountId, userId } = await requireRole('admin')
 
     // Per-user broadcast budget. Note: this limits how often a user
     // can *start* a campaign, not how many messages go out inside

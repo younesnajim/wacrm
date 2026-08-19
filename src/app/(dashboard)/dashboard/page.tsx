@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { hasMinRole } from '@/lib/auth/roles'
 import { formatCurrency } from '@/lib/currency'
 import {
   MessageSquare,
@@ -40,7 +41,14 @@ type RangeDays = 7 | 30 | 90
 
 export default function DashboardPage() {
   const t = useTranslations('Dashboard.page')
-  const { defaultCurrency } = useAuth()
+  const { defaultCurrency, accountRole } = useAuth()
+  // Open Deals Value and the Pipeline Value donut are account-wide
+  // roll-ups of every rep's deals — admin+ only. Agent/viewer get a
+  // personal-scale dashboard elsewhere (their own conversations,
+  // response time); these two cards are the piece that's explicitly
+  // account-wide, so they're hidden rather than shown with someone
+  // else's numbers baked in.
+  const canSeeAccountWideValue = !!accountRole && hasMinRole(accountRole, 'admin')
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
 
@@ -164,12 +172,14 @@ export default function DashboardPage() {
                 ),
               }}
             />
-            <MetricCard
-              title={t('openDealsValue')}
-              value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
-              icon={DollarSign}
-              subtitle={t('openDeals', { count: metrics.openDealsCount })}
-            />
+            {canSeeAccountWideValue && (
+              <MetricCard
+                title={t('openDealsValue')}
+                value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
+                icon={DollarSign}
+                subtitle={t('openDeals', { count: metrics.openDealsCount })}
+              />
+            )}
             <MetricCard
               title={t('messagesSentToday')}
               value={metrics.messagesSentToday.current.toLocaleString()}
@@ -199,7 +209,7 @@ export default function DashboardPage() {
           this, the pipeline card rendered at its natural (shorter)
           height while the line chart drove the row height. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="h-full lg:col-span-3">
+        <div className={`h-full ${canSeeAccountWideValue ? 'lg:col-span-3' : 'lg:col-span-5'}`}>
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -207,13 +217,15 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="h-full lg:col-span-2">
-          <PipelineDonut
-            data={pipeline}
-            loading={pipelineLoading}
-            currency={defaultCurrency}
-          />
-        </div>
+        {canSeeAccountWideValue && (
+          <div className="h-full lg:col-span-2">
+            <PipelineDonut
+              data={pipeline}
+              loading={pipelineLoading}
+              currency={defaultCurrency}
+            />
+          </div>
+        )}
       </div>
 
       {/* Response time */}

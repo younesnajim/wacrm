@@ -125,8 +125,12 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           </DropdownMenuItem>
           <DropdownMenuItem
             render={
+              // Plain `/settings` (the Overview landing) rather than a
+              // hardcoded tab — `?tab=whatsapp` is admin+ and would
+              // bounce a non-admin straight back out via the panel's
+              // RequireRole guard. Overview is viewer-safe for everyone.
               <Link
-                href="/settings?tab=whatsapp"
+                href="/settings"
                 className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
               />
             }

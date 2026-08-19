@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
+import { RequireRole } from '@/components/auth/require-role';
 import { SettingsRail } from '@/components/settings/settings-rail';
 import { SettingsOverview } from '@/components/settings/settings-overview';
 import { ProfileForm } from '@/components/settings/profile-form';
@@ -20,6 +21,7 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import {
   resolveSection,
+  SECTION_META,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 
@@ -28,7 +30,7 @@ import {
 // the "missing Suspense with CSR bailout" error and the whole page bails
 // to client-side rendering — shipping a settings screen whose rail never
 // wires up its click handlers. You land on the section the URL carried
-// (the account-menu Settings link points at `?tab=whatsapp`) and can't
+// (e.g. the Members tab's own deep links, `?tab=members`) and can't
 // navigate away. Mirror the login/signup split: a thin wrapper supplies
 // the boundary; the inner component reads the query string.
 export default function SettingsPage() {
@@ -96,7 +98,16 @@ function SettingsPageInner() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
         <SettingsRail active={section} onSelect={go} hints={hints} />
-        <div className="min-w-0">{panel[section]}</div>
+        <div className="min-w-0">
+          {/* Direct-URL guard: a bookmarked or hand-edited `?tab=`
+              pointing at a section above the caller's role bounces
+              back to the safe Overview default (resolveSection's own
+              fallback) rather than rendering — the rail already hides
+              the entry point, this closes the URL-typing path. */}
+          <RequireRole min={SECTION_META[section].minRole} redirectTo="/settings">
+            {panel[section]}
+          </RequireRole>
+        </div>
       </div>
     </div>
   );

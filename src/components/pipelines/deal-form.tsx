@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { hasMinRole } from "@/lib/auth/roles";
 import { CURRENCIES } from "@/lib/currency";
 import type {
   Contact,
@@ -55,7 +56,12 @@ export function DealForm({
 }: DealFormProps) {
   const t = useTranslations("Pipelines.form");
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, accountRole } = useAuth();
+  // Deleting a deal is admin+ — moving/editing stays agent+. RLS
+  // (deals_delete, 046_pass2_permissions.sql) is the real gate; this
+  // just keeps the button from being offered to a role that would
+  // 403 on click.
+  const canDeleteDeal = !!accountRole && hasMinRole(accountRole, "admin");
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
@@ -447,6 +453,7 @@ export function DealForm({
             </div>
 
             {deal &&
+              canDeleteDeal &&
               (confirmDelete ? (
                 <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
                   <span className="text-red-300">{t("deletePrompt")}</span>

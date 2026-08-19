@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { useCan } from "@/hooks/use-can";
 import { usePresence } from "@/hooks/use-presence";
 import { PresenceDot } from "@/components/presence/presence-dot";
 import { presenceLabel } from "@/lib/presence";
@@ -169,6 +170,12 @@ export function MessageThread({
   const tQuote = useTranslations("Inbox.replyQuote");
 
   const { user } = useAuth();
+  // Viewer: can read conversations, cannot assign or close. Same
+  // predicate as the composer's send gate (canSendMessages) — an
+  // agent participates in conversations, a viewer only observes.
+  // RLS (conversations_update, agent+) is the real gate; this keeps
+  // a viewer from being offered controls that would just 403.
+  const canModifyConversation = useCan("send-messages");
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -987,95 +994,120 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Status dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                  currentStatus?.color ?? "text-muted-foreground"
-                )}>
-                {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
-                <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-border bg-popover"
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
-                >
-                  {t(`status${opt.label}`)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Assign dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
+          {/* Status — interactive dropdown for agent+, a plain
+              read-only badge for viewer (see canModifyConversation
+              above). */}
+          {canModifyConversation ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={cn(
+                    "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                    currentStatus?.color ?? "text-muted-foreground"
+                  )}>
+                  {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+                  <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="border-border bg-popover"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => handleStatusChange(opt.value)}
+                    className={cn("text-sm", opt.color)}
+                  >
+                    {t(`status${opt.label}`)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <span
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                "inline-flex items-center justify-center h-7 px-2 text-xs",
+                currentStatus?.color ?? "text-muted-foreground"
+              )}
+            >
+              {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+            </span>
+          )}
+
+          {/* Assign — same split as status above. */}
+          {canModifyConversation ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  assignedAgentId ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <UserPlus className="h-3 w-3" />
+                <span className="hidden sm:inline">{assignLabel}</span>
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="border-border bg-popover"
+              >
+                {profiles.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </DropdownMenuItem>
+                ) : (
+                  profiles.map((p) => {
+                    const isSelected = p.user_id === assignedAgentId;
+                    const presence = getPresence(p.user_id);
+                    return (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => handleAssignChange(p.user_id)}
+                        className={cn(
+                          "text-sm",
+                          isSelected ? "text-primary" : "text-popover-foreground"
+                        )}
+                      >
+                        <PresenceDot
+                          status={presence}
+                          label={presenceLabel(
+                            presence,
+                            getRow(p.user_id)?.last_seen_at ?? null,
+                            now
+                          )}
+                          className="me-2"
+                        />
+                        <span className="flex-1">
+                          {p.full_name}
+                          {p.user_id === user?.id ? t("me") : ""}
+                        </span>
+                        {isSelected && <Check className="ms-2 h-3 w-3" />}
+                      </DropdownMenuItem>
+                    );
+                  })
+                )}
+                {assignedAgentId && (
+                  <>
+                    <DropdownMenuSeparator className="bg-border" />
+                    <DropdownMenuItem
+                      onClick={() => handleAssignChange(null)}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {t("unassign")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs",
                 assignedAgentId ? "text-primary" : "text-muted-foreground"
               )}
             >
               <UserPlus className="h-3 w-3" />
               <span className="hidden sm:inline">{assignLabel}</span>
-              <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-border bg-popover"
-            >
-              {profiles.length === 0 ? (
-                <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-                  {t("noTeammates")}
-                </DropdownMenuItem>
-              ) : (
-                profiles.map((p) => {
-                  const isSelected = p.user_id === assignedAgentId;
-                  const presence = getPresence(p.user_id);
-                  return (
-                    <DropdownMenuItem
-                      key={p.id}
-                      onClick={() => handleAssignChange(p.user_id)}
-                      className={cn(
-                        "text-sm",
-                        isSelected ? "text-primary" : "text-popover-foreground"
-                      )}
-                    >
-                      <PresenceDot
-                        status={presence}
-                        label={presenceLabel(
-                          presence,
-                          getRow(p.user_id)?.last_seen_at ?? null,
-                          now
-                        )}
-                        className="me-2"
-                      />
-                      <span className="flex-1">
-                        {p.full_name}
-                        {p.user_id === user?.id ? t("me") : ""}
-                      </span>
-                      {isSelected && <Check className="ms-2 h-3 w-3" />}
-                    </DropdownMenuItem>
-                  );
-                })
-              )}
-              {assignedAgentId && (
-                <>
-                  <DropdownMenuSeparator className="bg-border" />
-                  <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
-                    className="text-sm text-muted-foreground"
-                  >
-                    {t("unassign")}
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </span>
+          )}
         </div>
       </div>
 

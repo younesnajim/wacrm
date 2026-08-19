@@ -19,6 +19,7 @@ import { DealCard } from "./deal-card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCan } from "@/hooks/use-can";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
 
@@ -38,6 +39,11 @@ export function PipelineBoard({
   onEditDeal,
 }: PipelineBoardProps) {
   const { defaultCurrency } = useAuth();
+  // Viewer: view only, cannot create or move deals. RLS (deals_insert/
+  // deals_update, agent+) is the real gate — this keeps a viewer from
+  // seeing drag handles and "Add deal" buttons that would just
+  // silently fail against it.
+  const canEdit = useCan("send-messages");
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
 
   const sortedStages = useMemo(
@@ -119,6 +125,7 @@ export function PipelineBoard({
               currency={defaultCurrency}
               onAddDeal={onAddDeal}
               onEditDeal={onEditDeal}
+              canEdit={canEdit}
             />
           );
         })}
@@ -193,6 +200,7 @@ function StageColumn({
   currency,
   onAddDeal,
   onEditDeal,
+  canEdit,
 }: {
   stage: PipelineStage;
   deals: Deal[];
@@ -200,6 +208,7 @@ function StageColumn({
   currency: string;
   onAddDeal: (stageId: string) => void;
   onEditDeal: (deal: Deal) => void;
+  canEdit: boolean;
 }) {
   const t = useTranslations("Pipelines.board");
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
@@ -248,20 +257,23 @@ function StageColumn({
               deal={deal}
               stage={stage}
               onEdit={onEditDeal}
+              canEdit={canEdit}
             />
           ))
         )}
       </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onAddDeal(stage.id)}
-        className="mt-3 w-full justify-start border border-dashed border-border bg-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
-      >
-        <Plus className="me-1 h-3 w-3" />
-        {t("addDeal")}
-      </Button>
+      {canEdit && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onAddDeal(stage.id)}
+          className="mt-3 w-full justify-start border border-dashed border-border bg-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground"
+        >
+          <Plus className="me-1 h-3 w-3" />
+          {t("addDeal")}
+        </Button>
+      )}
     </div>
   );
 }
@@ -270,10 +282,12 @@ function DraggableDealCard({
   deal,
   stage,
   onEdit,
+  canEdit,
 }: {
   deal: Deal;
   stage: PipelineStage;
   onEdit: (deal: Deal) => void;
+  canEdit: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: deal.id,
@@ -282,9 +296,15 @@ function DraggableDealCard({
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
+      // Viewer: no drag handle at all — RLS (deals_update, agent+)
+      // would reject the move anyway; this just avoids offering a
+      // gesture that silently fails.
+      {...(canEdit ? { ...listeners, ...attributes } : {})}
+      style={{
+        opacity: isDragging ? 0.3 : 1,
+        touchAction: "none",
+        cursor: canEdit ? undefined : "default",
+      }}
     >
       <DealCard deal={deal} stage={stage} onEdit={onEdit} />
     </div>

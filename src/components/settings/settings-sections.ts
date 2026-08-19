@@ -12,6 +12,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
+import type { AccountRole } from '@/lib/auth/roles';
 
 /**
  * Settings information architecture for the redesigned page.
@@ -39,26 +40,39 @@ export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export const DEFAULT_SECTION: SettingsSection = 'overview';
 
-/** Rail grouping. `adminOnly` items are hidden for non-admins. */
+/**
+ * Rail grouping + access. `minRole` is the lowest account role that
+ * may see the rail entry and open the section — enforced in three
+ * places so hidden things never render or stay reachable:
+ *   1. `settings-rail.tsx` filters the nav by rank.
+ *   2. `settings/page.tsx` wraps each panel in `<RequireRole>`.
+ *   3. Nothing server-side needs a parallel check here — every
+ *      settings panel's own writes already go through requireRole()
+ *      API routes or role-gated RLS, which are the real gate. This
+ *      is UI-only: keeping the nav/redirect fallback in sync means
+ *      an under-privileged user just never gets an actionable
+ *      element pointed at a 403.
+ */
 export interface SectionMeta {
   id: SettingsSection;
   label: string;
   icon: LucideIcon;
   group: 'top' | 'account' | 'workspace';
+  minRole: AccountRole;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
-  overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top' },
-  profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
-  security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
-  appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
-  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
-  fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
-  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
-  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
-  api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
+  overview: { id: 'overview', label: 'Overview', icon: LayoutGrid, group: 'top', minRole: 'viewer' },
+  profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account', minRole: 'viewer' },
+  security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account', minRole: 'viewer' },
+  appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account', minRole: 'viewer' },
+  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace', minRole: 'admin' },
+  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace', minRole: 'agent' },
+  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace', minRole: 'agent' },
+  fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace', minRole: 'admin' },
+  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace', minRole: 'admin' },
+  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace', minRole: 'admin' },
+  api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace', minRole: 'admin' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [
