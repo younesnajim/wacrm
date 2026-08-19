@@ -83,22 +83,31 @@ export interface AccountContext {
   supabase: SupabaseClient;
   /** `auth.uid()` for the caller. Always defined when this resolves. */
   userId: string;
-  /** Caller's account_id from their profile row. */
+  /** The active account (profiles.account_id — "last active account",
+   *  not an authorization field as of migration 043/044). */
   accountId: string;
-  /** Caller's role within their account. */
+  /** Caller's role within the active account, resolved from
+   *  `account_members` — the source of truth as of the is_account_member()
+   *  flip (migration 044). Platform staff resolve to 'owner' here (see
+   *  `isPlatformStaff` below) since this type has no platform tier of
+   *  its own. */
   role: AccountRole;
   /** Lightweight account meta — id + name. */
   account: { id: string; name: string };
+  /** True if the caller has any platform_role — reaches every account
+   *  at full authority, mirroring is_account_member()'s SQL bypass.
+   *  `role` above already reflects this; exposed separately so
+   *  `requirePlatformRole()` (step 4) doesn't have to re-derive it. */
+  isPlatformStaff: boolean;
 }
 
 /**
  * Resolve the caller's user + account + role in one round trip.
  *
  * Throws `UnauthorizedError` if there's no Supabase session.
- * Throws `ForbiddenError` if the profile is missing account
- * fields (shouldn't happen post-017 migration; defensive guard
- * against profile rows that pre-date the backfill or were
- * inserted by hand).
+ * Throws `ForbiddenError` if the profile has no active account, or
+ * the caller has no `account_members` row for it (and isn't platform
+ * staff) — same "can't scope this user's queries" outcome either way.
  *
  * Use `requireRole(min)` instead when the route also needs a
  * minimum-role check — it's a thin wrapper over this.
@@ -116,7 +125,7 @@ export async function getCurrentAccount(): Promise<AccountContext> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("account_id, account_role")
+    .select("account_id, platform_role")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -124,17 +133,46 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     console.error("[getCurrentAccount] profile fetch error:", error);
     throw new ForbiddenError("Could not load account context");
   }
-  if (!data || !data.account_id || !data.account_role) {
+  if (!data || !data.account_id) {
     // Pre-migration profile, or a manual insert that skipped the
     // signup trigger. The user is authenticated but the app has
     // no way to scope their queries — treat as forbidden.
     throw new ForbiddenError("Profile is not linked to an account");
   }
-  if (!isAccountRole(data.account_role)) {
-    // The DB enum should make this impossible, but a future
-    // migration that broadens the enum without updating TS would
-    // hit this — surface it rather than silently widening.
-    throw new ForbiddenError(`Unknown account role: ${data.account_role}`);
+
+  // Loose inequality deliberately — treats a missing key the same as
+  // an explicit null. A real Postgrest response always includes the
+  // key, but this guards against any caller (or test mock) that
+  // doesn't, rather than silently granting platform authority to
+  // whoever happens to omit the field.
+  const isPlatformStaff = data.platform_role != null;
+
+  let role: AccountRole;
+  if (isPlatformStaff) {
+    role = "owner";
+  } else {
+    // account_members is the source of truth as of migration 044 —
+    // profiles.account_role is legacy from here on (kept for
+    // rollback per the migration plan, not read for authorization).
+    const { data: membership, error: memberErr } = await supabase
+      .from("account_members")
+      .select("role")
+      .eq("account_id", data.account_id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (memberErr) {
+      console.error("[getCurrentAccount] membership fetch error:", memberErr);
+      throw new ForbiddenError("Could not load account context");
+    }
+    if (!membership || !isAccountRole(membership.role)) {
+      // Profile points at an account_id with no matching membership
+      // row — orphaned profile, a role the DB enum widened past what
+      // TS knows about, or a pre-backfill row. Same "can't scope this
+      // user" outcome as the missing-account_id case above.
+      throw new ForbiddenError("You are not a member of this account");
+    }
+    role = membership.role;
   }
 
   // Load the account with a plain point lookup by id rather than an
@@ -167,8 +205,9 @@ export async function getCurrentAccount(): Promise<AccountContext> {
     supabase,
     userId: user.id,
     accountId: data.account_id,
-    role: data.account_role,
+    role,
     account: { id: account.id, name: account.name },
+    isPlatformStaff,
   };
 }
 

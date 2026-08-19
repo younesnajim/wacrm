@@ -16,9 +16,13 @@
 // Role-gating
 //   The tab itself is reachable by any member, but mutation buttons
 //   are wrapped in `<RequireRole min="admin">` / `useCan` so an
-//   agent or viewer sees the roster read-only. The server-side
-//   RPCs (set_member_role, remove_account_member) double-check
-//   the role anyway.
+//   agent or viewer sees the roster read-only. On top of that, a
+//   caller can only edit/remove a member whose role is strictly
+//   BELOW their own, and can only assign a role strictly below their
+//   own — an admin can't touch another admin, or promote an agent
+//   to admin (`canManageThisMember` / `editableRoles` below). The
+//   server-side RPCs (set_member_role, remove_account_member) are
+//   the real gate for both checks; this is convenience, not security.
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
@@ -66,7 +70,7 @@ import { useTranslations } from 'next-intl';
 import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
 import { usePresence } from '@/hooks/use-presence';
-import type { AccountRole } from '@/lib/auth/roles';
+import { roleRank, type AccountRole } from '@/lib/auth/roles';
 import { presenceLabel, summarize } from '@/lib/presence';
 import {
   PRESENCE_DOT_CLASS,
@@ -94,11 +98,9 @@ interface Invitation {
 }
 
 // These roles are translated via `useTranslations("Settings.roles")` where they are used.
-const EDITABLE_ROLES: { value: AccountRole }[] = [
-  { value: 'admin' },
-  { value: 'agent' },
-  { value: 'viewer' },
-];
+// Filtered per-caller at render time (see `editableRoles` below) — a
+// caller can only assign a role strictly below their own.
+const ALL_EDITABLE_ROLES: AccountRole[] = ['admin', 'agent', 'viewer'];
 
 // Per-role chip metadata (icon / label / colour) lives in the shared
 // ROLE_META module so this roster and the Overview identity chip can't
@@ -127,8 +129,33 @@ function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, stri
 export function MembersTab() {
   const t = useTranslations('Settings.members');
   const tRoles = useTranslations('Settings.roles');
-  const { user, canManageMembers } = useAuth();
+  const { user, canManageMembers, accountRole } = useAuth();
   const { getPresence, getRow, now } = usePresence();
+
+  // Peer-escalation guard, UI half — the RPCs are the real gate. A
+  // caller can only edit/remove a member whose CURRENT role is
+  // strictly below their own, and can only assign a role strictly
+  // below their own.
+  const editableRoles = ALL_EDITABLE_ROLES.filter(
+    (r) => !accountRole || roleRank(r) < roleRank(accountRole),
+  );
+  function canManageThisMember(member: Member): boolean {
+    return (
+      canManageMembers &&
+      !!accountRole &&
+      roleRank(accountRole) > roleRank(member.role)
+    );
+  }
+  // Same rank rule, applied to a pending invite's role rather than a
+  // member's current role — revoking an Admin-level invite is the
+  // same peer-escalation shape as creating one.
+  function canRevokeInvite(invite: Invitation): boolean {
+    return (
+      canManageMembers &&
+      !!accountRole &&
+      roleRank(accountRole) > roleRank(invite.role)
+    );
+  }
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -410,10 +437,13 @@ export function MembersTab() {
                       inline. Items align to the start on mobile so the
                       role dropdown lines up under the avatar. */}
                   <div className="flex items-center gap-2 sm:gap-3">
-                    {/* Role display / editor. Inline Select is admin+
-                        only AND not allowed on the owner row (owner
-                        changes go through transfer, which lands later). */}
-                    {canManageMembers && !isOwnerRow && !isSelf ? (
+                    {/* Role display / editor. Inline Select requires
+                        the caller to outrank this member's current
+                        role (never the owner row — no caller outranks
+                        'owner'; owner changes go through transfer,
+                        which lands later) — and offers only roles
+                        below the caller's own. */}
+                    {canManageThisMember(member) && !isOwnerRow && !isSelf ? (
                       <Select
                         value={member.role}
                         onValueChange={(v) =>
@@ -431,9 +461,9 @@ export function MembersTab() {
                           <SelectValue>{tRoles(member.role)}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          {EDITABLE_ROLES.map((r) => (
-                            <SelectItem key={r.value} value={r.value}>
-                              {tRoles(r.value)}
+                          {editableRoles.map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {tRoles(r)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -447,14 +477,15 @@ export function MembersTab() {
                       </span>
                     )}
 
-                    {/* Remove. Admin+ only; never on the owner row;
+                    {/* Remove. Requires the caller to outrank this
+                        member's current role; never on the owner row;
                         never on yourself. Pre-polish styling was
                         neutral-default + red-on-hover — the
                         destructive intent was invisible until the
                         user moused over. Now red is the default
                         state with a darker shade on hover so the
                         affordance reads at-a-glance. */}
-                    {canManageMembers && !isOwnerRow && !isSelf && (
+                    {canManageThisMember(member) && !isOwnerRow && !isSelf && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -537,10 +568,14 @@ export function MembersTab() {
                         </p>
                       </div>
 
-                      {/* Revoke: red default state, mirrors the
-                          members-tab Remove button. Pre-polish version
-                          read as a neutral secondary button until
-                          hover. */}
+                      {/* Revoke: hidden for invites at or above the
+                          caller's own rank — same rule as
+                          canManageThisMember, applied to the invite's
+                          role instead of a member's current role.
+                          Red default state, mirrors the members-tab
+                          Remove button. Pre-polish version read as a
+                          neutral secondary button until hover. */}
+                      {canRevokeInvite(inv) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -550,6 +585,7 @@ export function MembersTab() {
                         <MailX className="size-4" />
                         {t('revoke')}
                       </Button>
+                      )}
                     </li>
                     );
                   })}

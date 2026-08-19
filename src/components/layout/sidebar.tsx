@@ -87,6 +87,15 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /**
+   * When true, only account owners see this row. Automations, Flows,
+   * and AI Agents are operator/build surfaces — a client's own staff
+   * (admin/agent/viewer) only need the day-to-day sections. Routes
+   * under these are also guarded server-side by each segment's
+   * `layout.tsx` (RequireRole) — this hides the entry point, that
+   * blocks direct navigation.
+   */
+  ownerOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -96,9 +105,9 @@ const navItems: NavItem[] = [
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/automations", labelKey: "automations", icon: Zap, ownerOnly: true },
+  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, ownerOnly: true },
+  { href: "/agents", labelKey: "aiAgents", icon: Bot, ownerOnly: true },
 ];
 
 const bottomNavItems = [
@@ -116,7 +125,7 @@ import { useTranslations } from "next-intl";
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, isOwner, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
@@ -208,7 +217,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => !item.ownerOnly || isOwner)
+              .map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

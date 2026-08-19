@@ -9,11 +9,13 @@ import type { AutomationTriggerType } from '@/types'
  * account_id and dispatch over the account's automations.
  */
 export async function POST(request: Request) {
-  // Firing automations sends outbound WhatsApp — a write action. Require
-  // at least `agent`; a viewer must not be able to trigger sends.
+  // Firing automations sends outbound WhatsApp — a write action, and
+  // Automations is owner-only. `runAutomationsForTrigger` below creates
+  // its own service-role client internally (lib/automations/engine.ts),
+  // bypassing RLS, so this check is the ONLY gate on this route.
   let accountId: string
   try {
-    const ctx = await requireRole('agent')
+    const ctx = await requireRole('owner')
     accountId = ctx.accountId
   } catch (err) {
     return toErrorResponse(err)

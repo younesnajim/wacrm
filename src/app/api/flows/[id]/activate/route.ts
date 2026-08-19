@@ -24,12 +24,13 @@ export async function POST(
 ) {
   const { id } = await context.params
 
-  // Changing status (activate / draft / archive) is a write — the RLS
-  // flows_update policy requires `agent`, but the service-role client
-  // below bypasses RLS, so enforce the role here (a viewer passes the
-  // membership-only ownership check).
+  // Changing status (activate / draft / archive) is a write — owner-only
+  // (RLS flows_update requires `owner` as of migration 040). The
+  // service-role client below bypasses RLS entirely, so this check is
+  // the ONLY gate (the ownership lookup further down only confirms the
+  // flow exists and is readable, it doesn't gate the write).
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }

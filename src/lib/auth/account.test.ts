@@ -80,9 +80,10 @@ describe("getCurrentAccount", () => {
       user: { id: "user-1" },
       byTable: {
         profiles: {
-          data: { account_id: "acct-1", account_role: "owner" },
+          data: { account_id: "acct-1", platform_role: null },
           error: null,
         },
+        account_members: { data: { role: "owner" }, error: null },
         accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
       },
     });
@@ -95,15 +96,73 @@ describe("getCurrentAccount", () => {
       accountId: "acct-1",
       role: "owner",
       account: { id: "acct-1", name: "Acme" },
+      isPlatformStaff: false,
     });
 
-    // Two queries: profiles by user_id, then accounts by id. Neither
-    // selects an embedded relationship — the regression guard.
-    expect(calls.map((c) => c.table)).toEqual(["profiles", "accounts"]);
+    // Three queries: profiles by user_id, then account_members (role
+    // source as of the is_account_member() flip), then accounts by id.
+    // None select an embedded relationship — the #294 regression guard.
+    expect(calls.map((c) => c.table)).toEqual([
+      "profiles",
+      "account_members",
+      "accounts",
+    ]);
     expect(calls[0].columns).not.toMatch(/accounts!/);
     expect(calls[0].eqArgs).toEqual([["user_id", "user-1"]]);
-    expect(calls[1].columns).not.toMatch(/accounts!/);
-    expect(calls[1].eqArgs).toEqual([["id", "acct-1"]]);
+    expect(calls[1].eqArgs).toEqual([
+      ["account_id", "acct-1"],
+      ["user_id", "user-1"],
+    ]);
+    expect(calls[2].columns).not.toMatch(/accounts!/);
+    expect(calls[2].eqArgs).toEqual([["id", "acct-1"]]);
+  });
+
+  it("resolves platform staff as owner without a membership row", async () => {
+    // Bug this guards: an earlier version checked `platform_role !== null`,
+    // which is true for `undefined` too — silently granting platform
+    // authority to anyone whose row (or a test mock) simply omits the
+    // field. Loose `!= null` is the correct check; this test would have
+    // passed either way, so the account.ts comment + this scenario
+    // existing at all is the guard — see the sibling test below for the
+    // one that actually catches the regression.
+    const { client, calls } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        profiles: {
+          data: { account_id: "acct-1", platform_role: "platform_owner" },
+          error: null,
+        },
+        accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+
+    const ctx = await getCurrentAccount();
+
+    expect(ctx).toMatchObject({ role: "owner", isPlatformStaff: true });
+    // account_members is never queried for platform staff — the bypass
+    // is unconditional, mirroring is_account_member()'s SQL.
+    expect(calls.map((c) => c.table)).toEqual(["profiles", "accounts"]);
+  });
+
+  it("treats a profile with platform_role omitted as NOT platform staff", async () => {
+    // The actual regression guard: platform_role absent (undefined, not
+    // explicit null) must NOT be treated as platform staff. Omitting
+    // account_members here means the call fails if the code
+    // (incorrectly) tries the owner-bypass path instead of looking up
+    // membership.
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        profiles: { data: { account_id: "acct-1" }, error: null },
+        account_members: { data: { role: "viewer" }, error: null },
+        accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+
+    const ctx = await getCurrentAccount();
+    expect(ctx).toMatchObject({ role: "viewer", isPlatformStaff: false });
   });
 
   it("throws UnauthorizedError when there is no session", async () => {
@@ -125,16 +184,52 @@ describe("getCurrentAccount", () => {
     );
   });
 
-  it("maps an accounts query error to 'Could not load account context'", async () => {
-    // The exact #294 shape if the embed were still in play, but now on
-    // the decoupled accounts lookup: profile resolves, account read errors.
+  it("maps an account_members query error to 'Could not load account context'", async () => {
     const { client } = makeClient({
       user: { id: "user-1" },
       byTable: {
         profiles: {
-          data: { account_id: "acct-1", account_role: "admin" },
+          data: { account_id: "acct-1", platform_role: null },
           error: null,
         },
+        account_members: { data: null, error: { code: "PGRST200" } },
+      },
+    });
+    createClient.mockReturnValue(client);
+    const err = await getCurrentAccount().catch((e) => e);
+    expect(err).toBeInstanceOf(ForbiddenError);
+    expect(err.message).toBe("Could not load account context");
+  });
+
+  it("rejects a profile with no account_members row for its active account", async () => {
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        profiles: {
+          data: { account_id: "acct-1", platform_role: null },
+          error: null,
+        },
+        account_members: { data: null, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+    await expect(getCurrentAccount()).rejects.toThrow(
+      "You are not a member of this account",
+    );
+  });
+
+  it("maps an accounts query error to 'Could not load account context'", async () => {
+    // The exact #294 shape if the embed were still in play, but now on
+    // the decoupled accounts lookup: profile + membership resolve,
+    // account read errors.
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        profiles: {
+          data: { account_id: "acct-1", platform_role: null },
+          error: null,
+        },
+        account_members: { data: { role: "admin" }, error: null },
         accounts: { data: null, error: { code: "PGRST200" } },
       },
     });
@@ -148,7 +243,7 @@ describe("getCurrentAccount", () => {
     const { client } = makeClient({
       user: { id: "user-1" },
       byTable: {
-        profiles: { data: { account_id: null, account_role: null }, error: null },
+        profiles: { data: { account_id: null, platform_role: null }, error: null },
       },
     });
     createClient.mockReturnValue(client);
@@ -162,9 +257,10 @@ describe("getCurrentAccount", () => {
       user: { id: "user-1" },
       byTable: {
         profiles: {
-          data: { account_id: "acct-1", account_role: "viewer" },
+          data: { account_id: "acct-1", platform_role: null },
           error: null,
         },
+        account_members: { data: { role: "viewer" }, error: null },
         accounts: { data: null, error: null },
       },
     });

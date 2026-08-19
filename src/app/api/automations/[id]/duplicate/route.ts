@@ -9,11 +9,11 @@ export async function POST(
 ) {
   const { id } = await params
 
-  // Duplicating creates a new automation row — a write. Enforce `agent`
-  // (the service-role client below bypasses the agent-gated
-  // automations_insert RLS).
+  // Duplicating creates a new automation row — a write. Owner-only (the
+  // service-role client below bypasses the owner-gated automations_insert
+  // RLS entirely, so this check is the ONLY gate).
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }

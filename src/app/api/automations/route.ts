@@ -25,11 +25,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  // Creating an automation is a write — the RLS automations_insert policy
-  // requires `agent`, but this route inserts via the service-role client
-  // which bypasses RLS, so the role must be enforced here.
+  // Creating an automation is a write — Automations is an owner-only
+  // surface (UI-gated, and the RLS automations_insert policy requires
+  // `owner` as of migration 040). This route inserts via the
+  // service-role client, which bypasses RLS entirely, so this check is
+  // the ONLY gate — not defense in depth.
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }

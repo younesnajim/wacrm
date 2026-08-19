@@ -1,0 +1,21 @@
+-- ============================================================
+-- 041_manager_role_value.sql — platform architecture, step 1a:
+-- add the 'manager' value to account_role_enum, alone.
+--
+-- Split out from the rest of step 1 on purpose. Postgres won't let a
+-- freshly `ALTER TYPE ... ADD VALUE`d enum literal be referenced
+-- anywhere else in the same transaction (SQLSTATE 55P04) — and
+-- Supabase runs each migration file as one transaction. The next
+-- migration (042) references 'manager' inside role_rank(), so it
+-- needs 'manager' already committed, which means it can't live in
+-- the same file as this ALTER TYPE.
+--
+-- This file does nothing else — no other statement in it may
+-- reference 'manager', or the same error reappears here instead.
+--
+-- New rank sits between admin and agent: owner > admin > manager >
+-- agent > viewer. No existing row can have this value yet, and no
+-- code path produces it, so this is inert until step 5 wires up teams.
+-- ============================================================
+
+ALTER TYPE account_role_enum ADD VALUE IF NOT EXISTS 'manager';

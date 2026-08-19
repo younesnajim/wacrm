@@ -38,8 +38,11 @@ import {
 } from '@/components/ui/select';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/hooks/use-auth';
+import { roleRank } from '@/lib/auth/roles';
 
 type InviteRole = 'admin' | 'agent' | 'viewer';
+
+const ALL_INVITE_ROLES: InviteRole[] = ['admin', 'agent', 'viewer'];
 
 interface InviteMemberDialogProps {
   open: boolean;
@@ -76,15 +79,26 @@ export function InviteMemberDialog({
 }: InviteMemberDialogProps) {
   const t = useTranslations('Settings.invite');
   const tRoles = useTranslations('Settings.roles');
-  const { account } = useAuth();
-  const [role, setRole] = useState<InviteRole>('agent');
+  const { account, accountRole } = useAuth();
+
+  // Peer-escalation guard, UI half — the RPCs/route are the real
+  // gate. A caller can only invite a role strictly below their own
+  // (e.g. an admin can't mint another admin).
+  const invitableRoles = ALL_INVITE_ROLES.filter(
+    (r) => !accountRole || roleRank(r) < roleRank(accountRole),
+  );
+  const defaultRole = invitableRoles.includes('agent')
+    ? 'agent'
+    : (invitableRoles[0] ?? 'viewer');
+
+  const [role, setRole] = useState<InviteRole>(defaultRole);
   const [expiry, setExpiry] = useState<string>('7');
   const [label, setLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreatedInvite | null>(null);
 
   function reset() {
-    setRole('agent');
+    setRole(defaultRole);
     setExpiry('7');
     setLabel('');
     setResult(null);
@@ -277,9 +291,11 @@ export function InviteMemberDialog({
                     <SelectValue>{tRoles(role)}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">{tRoles('admin')}</SelectItem>
-                    <SelectItem value="agent">{tRoles('agent')}</SelectItem>
-                    <SelectItem value="viewer">{tRoles('viewer')}</SelectItem>
+                    {invitableRoles.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {tRoles(r)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

@@ -107,3 +107,31 @@ export function canDeleteAccount(role: AccountRole): boolean {
 export function canTransferOwnership(role: AccountRole): boolean {
   return role === "owner";
 }
+
+// ============================================================
+// Platform role — separate axis from account role. Mirrors
+// `platform_role_enum` (migration 042_platform_schema.sql). Null on
+// every profile except operator staff. Platform staff bypass account
+// membership entirely at the RLS layer (`is_account_member()`'s
+// platform-staff branch) and at the app layer (`getCurrentAccount()`
+// / `useAuth()` resolve them as account-tier 'owner' for whichever
+// account is active). This type only distinguishes the platform
+// tiers themselves — see `requirePlatformRole()` (step 4) for the
+// server-side gate that checks it.
+// ============================================================
+
+export type PlatformRole = "platform_owner" | "platform_admin" | "platform_billing";
+
+export const PLATFORM_ROLES: readonly PlatformRole[] = [
+  "platform_billing",
+  "platform_admin",
+  "platform_owner",
+] as const;
+
+/** Type-narrow an unknown string into a valid `PlatformRole`. */
+export function isPlatformRole(value: unknown): value is PlatformRole {
+  return (
+    typeof value === "string" &&
+    (PLATFORM_ROLES as readonly string[]).includes(value)
+  );
+}

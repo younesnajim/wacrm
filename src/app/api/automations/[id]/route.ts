@@ -49,11 +49,12 @@ export async function PATCH(
 ) {
   const { id } = await params
 
-  // Editing an automation is a write — the RLS automations_update policy
-  // requires `agent`, but this route mutates via the service-role client
-  // which bypasses RLS, so enforce the role here.
+  // Editing an automation is a write — owner-only (RLS automations_update
+  // requires `owner` as of migration 040). This route mutates via the
+  // service-role client, which bypasses RLS entirely, so this check is
+  // the ONLY gate — not defense in depth.
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }
@@ -137,10 +138,11 @@ export async function DELETE(
 ) {
   const { id } = await params
 
-  // Deleting an automation is a write — enforce `agent` (the service-role
-  // client below bypasses the agent-gated automations_delete RLS).
+  // Deleting an automation is a write — owner-only (the service-role
+  // client below bypasses the owner-gated automations_delete RLS
+  // entirely, so this check is the ONLY gate).
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }

@@ -93,11 +93,13 @@ export async function PUT(
 ) {
   const { id } = await context.params
 
-  // Writes require at least `agent` — the RLS flows_update policy demands
-  // it, but this route mutates via the service-role client which bypasses
-  // RLS, so the role must be enforced here (a viewer passes ownership).
+  // Owner-only — the RLS flows_update policy requires `owner` as of
+  // migration 040, but this route mutates via the service-role client
+  // which bypasses RLS entirely, so this check is the ONLY gate (the
+  // ownership check below only confirms the flow exists and is readable,
+  // it doesn't gate the write).
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }
@@ -189,10 +191,11 @@ export async function DELETE(
 ) {
   const { id } = await context.params
 
-  // Writes require at least `agent` — see the PUT handler note. The
-  // service-role client below bypasses the agent-gated flows_delete RLS.
+  // Owner-only — see the PUT handler note. The service-role client below
+  // bypasses the owner-gated flows_delete RLS entirely, so this check is
+  // the ONLY gate.
   try {
-    await requireRole('agent')
+    await requireRole('owner')
   } catch (err) {
     return toErrorResponse(err)
   }

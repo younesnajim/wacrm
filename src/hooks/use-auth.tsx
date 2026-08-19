@@ -18,7 +18,9 @@ import {
   canManageMembers as canManageMembersFor,
   canSendMessages as canSendMessagesFor,
   isAccountRole,
+  isPlatformRole,
   type AccountRole,
+  type PlatformRole,
 } from "@/lib/auth/roles";
 
 interface Profile {
@@ -34,7 +36,12 @@ interface Profile {
    */
   beta_features: string[];
   account_id: string | null;
+  /** Resolved role for `account_id`, from `account_members` — not the
+   *  raw (legacy as of migration 044) `profiles.account_role` column.
+   *  Platform staff resolve to 'owner' here; see `platform_role` /
+   *  `isPlatformStaff` below to distinguish that case. */
   account_role: AccountRole | null;
+  platform_role: PlatformRole | null;
 }
 
 interface AccountSummary {
@@ -130,6 +137,14 @@ interface AuthContextValue {
   canEditSettings: boolean;
   /** True if the caller can send messages and edit operational data (agent+). */
   canSendMessages: boolean;
+  /** True if `profile.platform_role` is set — reaches every account at
+   *  full authority (mirrors is_account_member()'s SQL bypass). `isOwner`
+   *  etc. above already reflect this for the active account; this is
+   *  for surfaces that specifically need "platform staff", not "owner
+   *  of this account" (e.g. an account switcher, step 6). */
+  isPlatformStaff: boolean;
+  /** The specific platform tier, or null. Null for every client user. */
+  platformRole: PlatformRole | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -151,7 +166,7 @@ interface ProfileRow {
   role: string | null;
   beta_features: string[] | null;
   account_id: string | null;
-  account_role: string | null;
+  platform_role: string | null;
 }
 
 /**
@@ -192,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await supabase
           .from("profiles")
           .select(
-            "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
+            "id, full_name, email, avatar_url, role, beta_features, account_id, platform_role",
           )
           .eq("user_id", userId)
           .maybeSingle();
@@ -258,14 +273,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        // Narrow the DB enum into our AccountRole union. The DB
-        // constraint should make this unconditional, but a future
-        // migration that broadens the enum without updating TS would
-        // otherwise crash here — fall back to null and let UI gates
-        // treat the caller as least-privileged.
-        const accountRole = isAccountRole(data.account_role)
-          ? data.account_role
+        const platformRole = isPlatformRole(data.platform_role)
+          ? data.platform_role
           : null;
+
+        // Role resolution as of the is_account_member() flip (migration
+        // 044): account_members is the source of truth, not
+        // profiles.account_role (legacy from here on). Platform staff
+        // bypass membership entirely — resolved as 'owner' here, since
+        // AccountRole has no platform tier of its own; use
+        // `platformRole`/`isPlatformStaff` to distinguish that case.
+        let accountRole: AccountRole | null = null;
+        if (data.account_id) {
+          if (platformRole) {
+            accountRole = "owner";
+          } else {
+            const { data: membership, error: memberErr } = await supabase
+              .from("account_members")
+              .select("role")
+              .eq("account_id", data.account_id)
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (memberErr) {
+              console.error("[AuthProvider] fetchMembership error:", {
+                message: memberErr.message,
+                details: memberErr.details,
+                hint: memberErr.hint,
+                code: memberErr.code,
+              });
+            } else if (isAccountRole(membership?.role)) {
+              accountRole = membership.role;
+            }
+          }
+        }
 
         setProfile({
           id: data.id,
@@ -280,16 +320,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           beta_features: data.beta_features ?? [],
           account_id: data.account_id ?? null,
           account_role: accountRole,
+          platform_role: platformRole,
         });
         setAccount(accountRow);
         if (!data.account_id || !accountRole) {
-          // The row exists but carries no tenancy. Migration 017 made
-          // both columns NOT NULL for new signups, so this is a user
-          // whose bootstrap didn't complete (handle_new_user swallows a
-          // failure as a WARNING) or one predating that migration.
+          // The row exists but carries no tenancy — no account_id, or
+          // no account_members row for it (and not platform staff).
           // Every insert and update they attempt will be denied by RLS.
           setStatusDetail(
-            `profile ${data.id} has no ${!data.account_id ? "account_id" : "account_role"}`,
+            `profile ${data.id} has no ${!data.account_id ? "account_id" : "account_members role"}`,
           );
         }
       } else {
@@ -410,8 +449,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canManageMembers: role ? canManageMembersFor(role) : false,
       canEditSettings: role ? canEditSettingsFor(role) : false,
       canSendMessages: role ? canSendMessagesFor(role) : false,
+      isPlatformStaff: profile?.platform_role != null,
+      platformRole: profile?.platform_role ?? null,
     };
-  }, [profile?.account_role, profile?.account_id]);
+  }, [profile?.account_role, profile?.account_id, profile?.platform_role]);
 
   // Signed out is not a broken account — the shell redirects to /login
   // before anything reads this.
@@ -481,6 +522,8 @@ export function useAuth(): AuthContextValue {
       canManageMembers: false,
       canEditSettings: false,
       canSendMessages: false,
+      isPlatformStaff: false,
+      platformRole: null,
     };
   }
   return ctx;

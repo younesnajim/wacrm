@@ -1,25 +1,36 @@
 'use client';
 
 // ============================================================
-// /join/[token] — invitation redemption landing page.
+// /join/[token] — the ONLY way to get an account now that open
+// signup is retired. Creates the auth user (when needed) and
+// redeems the invite, in that order, so the invitee lands in the
+// inviter's account with the invited role — never as owner of a
+// fresh personal account.
 //
-// Four UI states driven by:
-//   - the peek result (server-validated invite payload), and
-//   - whether the visitor is currently authenticated.
+// States, driven by the peek result, auth status, and whether a
+// fresh signup is waiting on email confirmation:
 //
-//   ┌──────────────────────┬───────────────┬─────────────────────────┐
-//   │ peek                 │ auth          │ render                   │
-//   ├──────────────────────┼───────────────┼─────────────────────────┤
-//   │ loading              │ —             │ spinner                  │
-//   │ ok:false (any reason)│ —             │ friendly error + signup  │
-//   │ ok:true              │ signed out    │ "Sign up" + "Sign in"    │
-//   │ ok:true              │ signed in     │ "Accept" button → redeem │
-//   └──────────────────────┴───────────────┴─────────────────────────┘
+//   ┌──────────────────────┬───────────────┬───────────────────────────┐
+//   │ peek                 │ auth          │ render                    │
+//   ├──────────────────────┼───────────────┼───────────────────────────┤
+//   │ loading              │ —             │ spinner                   │
+//   │ ok:false (any reason)│ —             │ friendly error + sign in  │
+//   │ ok:true              │ signed out    │ inline signup form        │
+//   │   ↳ signup submitted,│               │ "check your email" card   │
+//   │     no session yet   │               │                           │
+//   │ ok:true              │ signed in     │ "Accept" button → redeem  │
+//   └──────────────────────┴───────────────┴───────────────────────────┘
 //
-// We deliberately do NOT redeem automatically on page load — the
-// invitee should confirm what account/role they're accepting.
-// Auto-redeem would also race with the signup flow returning to
-// this page after email verification.
+// Two different redeem triggers, deliberately:
+//   - Fresh signup submitted from this page, session came back
+//     immediately (email confirmation disabled on this project) →
+//     redeem right away. Submitting the form *is* their consent;
+//     no second click needed.
+//   - Landing here already authenticated (existing user signing in,
+//     or a fresh signup returning via /auth/callback after clicking
+//     the confirmation email) → still requires an explicit "Accept
+//     invitation" click. They may have arrived passively (an old
+//     tab, a forwarded link), so we don't assume intent for them.
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
@@ -37,6 +48,8 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Card,
   CardContent,
@@ -88,7 +101,7 @@ export default function JoinPage() {
   const [peek, setPeek] = useState<PeekResult | null>(null);
   // Local auth probe — the AuthProvider lives inside the (dashboard)
   // route group, so it doesn't reach this page. We hit Supabase
-  // directly the same way `/login` and `/signup` do.
+  // directly the same way `/login` does.
   const [authedUserId, setAuthedUserId] = useState<string | null | undefined>(
     undefined, // undefined = unknown / still loading; null = signed out
   );
@@ -99,6 +112,18 @@ export default function JoinPage() {
   // step. Surface a blocking modal that walks them through it.
   const [conflictMessage, setConflictMessage] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+
+  // Inline signup form (replaces the old /signup redirect).
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [signupLoading, setSignupLoading] = useState(false);
+  // True once signUp() has succeeded but returned no session — this
+  // project requires email confirmation, so redemption waits for the
+  // visitor to click the link and return via /auth/callback.
+  const [awaitingEmailConfirm, setAwaitingEmailConfirm] = useState(false);
 
   // Extracted so the "Try again" button on the server_error card
   // can re-run the same logic without remounting the component.
@@ -190,6 +215,64 @@ export default function JoinPage() {
     }
   }, [token, t]);
 
+  // Creates the auth user, then redeems the invite in the same flow
+  // when Supabase hands back a session immediately (email
+  // confirmation disabled). `handle_new_user` will have already
+  // bootstrapped a personal "owner" account for the brand-new user
+  // the instant signUp() ran — that's fine, `redeem_invitation` is
+  // built to detect exactly that (a fresh, empty, self-owned account)
+  // and move the caller into the inviter's account instead, deleting
+  // the orphan. See supabase/migrations/019_invitation_rpcs.sql.
+  const handleSignupAndJoin = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSignupError(null);
+
+      if (password !== confirmPassword) {
+        setSignupError(t('passwordMismatch'));
+        return;
+      }
+      if (password.length < 6) {
+        setSignupError(t('passwordTooShort'));
+        return;
+      }
+
+      setSignupLoading(true);
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+          // Only reached if this project requires email confirmation.
+          // Lands back here, authenticated, via the PKCE code-exchange
+          // route — then the "signed in → Accept invitation" branch
+          // below takes over.
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`/join/${token}`)}`,
+        },
+      });
+
+      if (error) {
+        setSignupError(error.message);
+        setSignupLoading(false);
+        return;
+      }
+
+      if (data.session) {
+        // Confirmation disabled — we're authenticated right now.
+        // Submitting this form was their consent; redeem immediately
+        // instead of making them click Accept a second time.
+        await handleAccept();
+        setSignupLoading(false);
+        return;
+      }
+
+      setAwaitingEmailConfirm(true);
+      setSignupLoading(false);
+    },
+    [email, password, confirmPassword, fullName, token, t, handleAccept],
+  );
+
   const handleSignOutAndRetry = useCallback(async () => {
     setSigningOut(true);
     try {
@@ -234,11 +317,12 @@ export default function JoinPage() {
         <CardContent className="flex flex-col gap-2">
           {/* For server_error the failure is transient — the network
               flapped or the peek endpoint hiccupped. Try-again is
-              the right primary action; the "create account" /
-              "sign in" links stay as secondary options. Other
+              the right primary action; sign-in stays as a secondary
+              option in case they already have an account. Other
               failure reasons (not_found / used / expired) are
-              terminal for this token, so no retry — just the
-              signup/sign-in escape hatches. */}
+              terminal for this token — there's no open signup to
+              fall back to, so the body copy above already points
+              them at asking for a new invite. */}
           {peek.reason === 'server_error' ? (
             <>
               <Button
@@ -247,22 +331,6 @@ export default function JoinPage() {
               >
                 {t('tryAgain')}
               </Button>
-              <Link href="/signup">
-                <Button
-                  variant="outline"
-                  className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  {t('createAccountInstead')}
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  {t('createAccountInstead')}
-                </Button>
-              </Link>
               <Link href="/login">
                 <Button
                   variant="outline"
@@ -272,6 +340,12 @@ export default function JoinPage() {
                 </Button>
               </Link>
             </>
+          ) : (
+            <Link href="/login">
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                {t('signIn')}
+              </Button>
+            </Link>
           )}
         </CardContent>
       </Card>
@@ -393,16 +467,109 @@ export default function JoinPage() {
     );
   }
 
-  // ----- Not authed: prompt to sign up or sign in -----
+  // ----- Not authed, fresh signup submitted, waiting on email click -----
+  if (awaitingEmailConfirm) {
+    return (
+      <Card className="w-full max-w-md border-border bg-card">
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+            <CheckCircle className="h-6 w-6 text-primary" />
+          </div>
+          <CardTitle className="text-xl text-foreground">{t('checkEmailTitle')}</CardTitle>
+          <CardDescription className="text-muted-foreground">
+            {t.rich('checkEmailDesc', {
+              email,
+              bold: (chunks: React.ReactNode) => (
+                <span className="text-foreground">{chunks}</span>
+              ),
+            })}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  // ----- Not authed: inline signup, then join -----
   return (
     <Card className="w-full max-w-md border-border bg-card">
       {inviteHeader}
-      <CardContent className="flex flex-col gap-2">
-        <Link href={`/signup?invite=${encodeURIComponent(token!)}`}>
-          <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-            {t('createAccountJoin')}
+      <CardContent className="flex flex-col gap-4">
+        <form onSubmit={handleSignupAndJoin} className="flex flex-col gap-4">
+          {signupError && (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              {signupError}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="fullName" className="text-muted-foreground">
+              {t('formFullNameLabel')}
+            </Label>
+            <Input
+              id="fullName"
+              type="text"
+              placeholder={t('formFullNamePlaceholder')}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email" className="text-muted-foreground">
+              {t('formEmailLabel')}
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder={t('formEmailPlaceholder')}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="password" className="text-muted-foreground">
+              {t('formPasswordLabel')}
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder={t('formPasswordPlaceholder')}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="confirmPassword" className="text-muted-foreground">
+              {t('formConfirmPasswordLabel')}
+            </Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder={t('formConfirmPasswordPlaceholder')}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={signupLoading}
+            className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {signupLoading ? t('submitting') : t('createAccountJoin')}
           </Button>
-        </Link>
+        </form>
+
         <Link href={`/login?invite=${encodeURIComponent(token!)}`}>
           <Button
             variant="outline"

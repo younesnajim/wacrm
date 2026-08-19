@@ -6,6 +6,8 @@ import type { ComponentType } from 'react'
 
 import { useTranslations } from 'next-intl'
 
+import { useAuth } from '@/hooks/use-auth'
+
 // Quick-action shortcuts. Each navigates to the page that owns the
 // relevant "create" flow. We deliberately don't try to auto-open any
 // modal on the target page — that'd require touching those pages,
@@ -15,21 +17,26 @@ interface Action {
   href: string
   icon: ComponentType<{ className?: string }>
   tint: string
+  /** Owner-only, mirroring the sidebar's Automations/Flows/AI Agents
+   *  gating — the target route redirects a non-owner anyway, so
+   *  don't show the shortcut in the first place. */
+  ownerOnly?: boolean
 }
 
 const ACTIONS: Action[] = [
   { labelKey: 'newContact', href: '/contacts', icon: UserPlus, tint: 'text-primary' },
   { labelKey: 'newDeal', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
   { labelKey: 'newBroadcast', href: '/broadcasts/new', icon: Radio, tint: 'text-amber-400' },
-  { labelKey: 'newAutomation', href: '/automations/new', icon: Zap, tint: 'text-primary' },
+  { labelKey: 'newAutomation', href: '/automations/new', icon: Zap, tint: 'text-primary', ownerOnly: true },
 ]
 
 export function QuickActions() {
   const t = useTranslations('Dashboard.quickActions')
-  
+  const { isOwner } = useAuth()
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {ACTIONS.map((a) => {
+      {ACTIONS.filter((a) => !a.ownerOnly || isOwner).map((a) => {
         const Icon = a.icon
         return (
           <Link

@@ -39,7 +39,15 @@ function makeSupabaseMock() {
       switch (table) {
         case 'profiles':
           return {
-            data: { account_id: 'acct-1', account_role: callerRole },
+            data: { account_id: 'acct-1', platform_role: null },
+            error: null,
+          }
+        case 'account_members':
+          // getCurrentAccount() resolves role from here as of the
+          // is_account_member() flip — profiles.account_role is no
+          // longer read for authorization.
+          return {
+            data: { role: callerRole },
             error: null,
           }
         case 'accounts':

@@ -26,7 +26,7 @@ import {
   inviteExpiresAt,
   inviteUrl,
 } from "@/lib/auth/invitations";
-import { isAccountRole } from "@/lib/auth/roles";
+import { isAccountRole, roleRank } from "@/lib/auth/roles";
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -190,6 +190,19 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "'role' must be one of admin, agent, viewer" },
         { status: 400 },
+      );
+    }
+
+    // Peer-escalation guard: an admin inviting another admin mints a
+    // peer who could then act on the inviter (e.g. remove them) once
+    // they redeem. The invite's role must be strictly below the
+    // inviter's own — mirrors the rank check in set_member_role /
+    // remove_account_member, so this can't be redeemed into more
+    // access than a direct invite of that role would grant anyway.
+    if (roleRank(role) >= roleRank(ctx.role)) {
+      return NextResponse.json(
+        { error: "You can only invite a role below your own" },
+        { status: 403 },
       );
     }
 
