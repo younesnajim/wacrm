@@ -1848,8 +1848,10 @@
       "cancel": "Cancel",
       "saveDoc": "Save document",
       "addDoc": "Add document",
-      "reindex": "Reindex",
+      "reindex": "Reindex knowledge base",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
+      "notIndexedBadge": "Not indexed",
+      "unindexedBanner": "{count} document(s) aren't indexed for semantic search yet. Reindex to enable it for them.",
       "loading": "Loading…"
     }
   }

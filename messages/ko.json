@@ -1848,8 +1848,10 @@
       "cancel": "취소",
       "saveDoc": "문서 저장",
       "addDoc": "문서 추가",
-      "reindex": "재색인",
+      "reindex": "지식베이스 재색인",
       "reindexTooltip": "모든 문서를 다시 임베딩합니다 (예: 임베딩 키 추가 후)",
+      "notIndexedBadge": "색인되지 않음",
+      "unindexedBanner": "문서 {count}개가 아직 의미 기반 검색용으로 색인되지 않았습니다. 재색인하여 활성화하세요.",
       "loading": "불러오는 중…"
     }
   }

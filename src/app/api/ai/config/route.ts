@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import {
   getCurrentAccount,
   requireRole,
@@ -8,7 +8,14 @@ import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
 import { embedTexts } from '@/lib/ai/embeddings'
+import { reindexAccountDocuments } from '@/lib/ai/knowledge'
+import { supabaseAdmin } from '@/lib/ai/admin-client'
 import { AiError, type AiProvider } from '@/lib/ai/types'
+
+// The `after()` callback in POST can re-embed every document in the
+// account's KB when the embeddings key changes — give it headroom beyond
+// the platform default (Vercel clamps this to the plan's ceiling).
+export const maxDuration = 60
 
 function bad(message: string) {
   return NextResponse.json({ error: message }, { status: 400 })
@@ -128,9 +135,29 @@ export async function POST(request: Request) {
     // Reuse the stored key when the form didn't send a fresh one.
     const { data: existing } = await supabase
       .from('ai_configs')
-      .select('id, provider, model, api_key')
+      .select('id, provider, model, api_key, embeddings_api_key')
       .eq('account_id', accountId)
       .maybeSingle()
+
+    // Newly set or changed (not just re-saved unchanged): existing
+    // documents were ingested under whatever key — or no key — was
+    // active at the time, so a real change here means some of them are
+    // stale and need their embeddings backfilled. A corrupt stored key
+    // (bad ENCRYPTION_KEY) counts as "changed" too — there's no way to
+    // tell it apart from a real rotation, and reindexing is harmless
+    // either way.
+    let embeddingsKeyChanged = false
+    if (rawEmbeddingsKey) {
+      let previousEmbeddingsKey: string | null = null
+      if (existing?.embeddings_api_key) {
+        try {
+          previousEmbeddingsKey = decrypt(existing.embeddings_api_key)
+        } catch {
+          previousEmbeddingsKey = null
+        }
+      }
+      embeddingsKeyChanged = previousEmbeddingsKey !== rawEmbeddingsKey
+    }
 
     let apiKeyPlain: string
     if (rawKey) {
@@ -241,6 +268,40 @@ export async function POST(request: Request) {
           { status: 500 },
         )
       }
+    }
+
+    // Backfill embeddings for documents ingested before this key existed
+    // (or under a different key) — after the response, not before: an
+    // account's KB can hold many documents, and re-embedding all of them
+    // is exactly the kind of slow work that shouldn't hold the config
+    // save open. `after()` keeps the function alive to finish it instead
+    // of racing a floating promise against the serverless runtime
+    // freezing the moment the response is sent (see the webhook route's
+    // note on issue #301 for why a bare `void reindex(...)` isn't safe
+    // here). Runs under the service-role client since nothing here
+    // depends on the request's cookies/session by the time it fires.
+    if (embeddingsKeyChanged) {
+      after(async () => {
+        try {
+          const result = await reindexAccountDocuments(
+            supabaseAdmin(),
+            accountId,
+            rawEmbeddingsKey,
+          )
+          if (result.error) {
+            console.error(
+              `[ai/config] auto-reindex for account ${accountId} stopped after ${result.reindexed}/${result.total}:`,
+              result.error,
+            )
+          } else if (result.total > 0) {
+            console.log(
+              `[ai/config] auto-reindexed ${result.reindexed}/${result.total} document(s) for account ${accountId} after embeddings key change`,
+            )
+          }
+        } catch (err) {
+          console.error(`[ai/config] auto-reindex for account ${accountId} threw:`, err)
+        }
+      })
     }
 
     return NextResponse.json({ success: true })

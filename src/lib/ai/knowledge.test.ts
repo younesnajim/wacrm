@@ -7,7 +7,7 @@ vi.mock('./embeddings', () => ({
   toVectorLiteral: (v: number[]) => `[${v.join(',')}]`,
 }))
 
-import { retrieveKnowledge, ingestDocument } from './knowledge'
+import { retrieveKnowledge, ingestDocument, reindexAccountDocuments } from './knowledge'
 
 interface FakeState {
   semantic: { id: string; content: string }[]
@@ -156,5 +156,67 @@ describe('ingestDocument', () => {
     // Chunks were inserted (lexical search works) despite the embed failure…
     expect(state.inserted).toHaveLength(1)
     expect(state.inserted![0].embedding).toBeNull()
+  })
+})
+
+describe('reindexAccountDocuments', () => {
+  function makeReindexDb(docs: { id: string; content: string }[]) {
+    const inserted: Record<string, Record<string, unknown>[]> = {}
+    const db = {
+      from: (table: string) => {
+        if (table === 'ai_knowledge_documents') {
+          return {
+            select: () => ({
+              eq: () => Promise.resolve({ data: docs, error: null }),
+            }),
+          }
+        }
+        // ai_knowledge_chunks, driven by ingestDocument
+        return {
+          delete: () => ({ eq: () => Promise.resolve({ error: null }) }),
+          insert: (rows: Record<string, unknown>[]) => {
+            inserted[rows[0].document_id as string] = rows
+            return Promise.resolve({ error: null })
+          },
+        }
+      },
+    }
+    return { db: db as unknown as SupabaseClient, inserted }
+  }
+
+  it('re-embeds every document and reports the count', async () => {
+    const { db, inserted } = makeReindexDb([
+      { id: 'doc-1', content: 'hello world' },
+      { id: 'doc-2', content: 'goodbye world' },
+    ])
+    const result = await reindexAccountDocuments(db, 'acct', 'sk-x')
+    expect(result).toEqual({ reindexed: 2, total: 2 })
+    expect(h.embedTexts).toHaveBeenCalledTimes(2)
+    expect(inserted['doc-1'][0].embedding).toBe('[0,0]')
+    expect(inserted['doc-2'][0].embedding).toBe('[0,0]')
+  })
+
+  it('stores lexical-only chunks when no embeddings key is passed', async () => {
+    const { db, inserted } = makeReindexDb([{ id: 'doc-1', content: 'hello world' }])
+    const result = await reindexAccountDocuments(db, 'acct', null)
+    expect(result).toEqual({ reindexed: 1, total: 1 })
+    expect(h.embedTexts).not.toHaveBeenCalled()
+    expect(inserted['doc-1'][0].embedding).toBeNull()
+  })
+
+  it('stops at the first failing document and reports how far it got', async () => {
+    const { db } = makeReindexDb([
+      { id: 'doc-1', content: 'hello world' },
+      { id: 'doc-2', content: 'goodbye world' },
+      { id: 'doc-3', content: 'third document' },
+    ])
+    h.embedTexts.mockReset()
+    h.embedTexts
+      .mockImplementationOnce(async (_key: string, inputs: string[]) => inputs.map(() => [0, 0]))
+      .mockRejectedValueOnce(new Error('rate limited'))
+    const result = await reindexAccountDocuments(db, 'acct', 'sk-x')
+    expect(result.reindexed).toBe(1)
+    expect(result.total).toBe(3)
+    expect(result.error).toBe('Error: rate limited')
   })
 })

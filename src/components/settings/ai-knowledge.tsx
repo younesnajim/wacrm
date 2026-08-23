@@ -1,12 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, Pencil, RefreshCw, BookOpen } from 'lucide-react';
+import {
+  Loader2,
+  Plus,
+  Trash2,
+  Pencil,
+  RefreshCw,
+  BookOpen,
+  AlertTriangle,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Card,
   CardContent,
@@ -20,6 +30,7 @@ interface DocSummary {
   id: string;
   title: string;
   updated_at: string;
+  has_embeddings: boolean;
 }
 
 /** Editor target: 'new' when creating, a doc id when editing, null when closed. */
@@ -43,6 +54,13 @@ export function AiKnowledgeCard({
   const [reindexing, setReindexing] = useState(false);
   const loadedAccountIdRef = useRef<string | null>(null);
   const t = useTranslations('Settings.aiKnowledge');
+
+  // Only meaningful once the account has an embeddings key — without one
+  // every document is lexical-only by design, so there's nothing to flag.
+  const unindexedCount = useMemo(
+    () => (hasEmbeddingsKey ? docs.filter((d) => !d.has_embeddings).length : 0),
+    [docs, hasEmbeddingsKey],
+  );
 
   const fetchDocs = useCallback(async () => {
     setLoading(true);
@@ -176,6 +194,15 @@ export function AiKnowledgeCard({
           </div>
         ) : (
           <>
+            {unindexedCount > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  {t('unindexedBanner', { count: unindexedCount })}
+                </AlertDescription>
+              </Alert>
+            )}
+
             {docs.length === 0 && editing === null && (
               <p className="text-sm text-muted-foreground">
                 {t('noDocs')}
@@ -189,8 +216,15 @@ export function AiKnowledgeCard({
                     key={doc.id}
                     className="flex items-center justify-between gap-2 px-3 py-2"
                   >
-                    <span className="min-w-0 truncate text-sm text-foreground">
-                      {doc.title}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 truncate text-sm text-foreground">
+                        {doc.title}
+                      </span>
+                      {hasEmbeddingsKey && !doc.has_embeddings && (
+                        <Badge variant="outline" className="shrink-0 text-muted-foreground">
+                          {t('notIndexedBadge')}
+                        </Badge>
+                      )}
                     </span>
                     {canEdit && (
                       <span className="flex shrink-0 gap-1">
@@ -260,7 +294,7 @@ export function AiKnowledgeCard({
                   </Button>
                   {hasEmbeddingsKey && docs.length > 0 && (
                     <Button
-                      variant="ghost"
+                      variant={unindexedCount > 0 ? 'outline' : 'ghost'}
                       size="sm"
                       onClick={reindex}
                       disabled={reindexing}

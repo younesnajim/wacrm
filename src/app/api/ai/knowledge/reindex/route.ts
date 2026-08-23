@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { loadEmbeddingsKey } from '@/lib/ai/config'
-import { ingestDocument } from '@/lib/ai/knowledge'
-import { AiError } from '@/lib/ai/types'
+import { reindexAccountDocuments } from '@/lib/ai/knowledge'
 
 /**
  * POST /api/ai/knowledge/reindex  (admin+)
@@ -12,24 +11,17 @@ import { AiError } from '@/lib/ai/types'
  * after adding an embeddings key: existing documents were stored
  * lexical-only, and this backfills their vectors so semantic search
  * turns on. Also recovers documents whose indexing failed earlier.
+ *
+ * (The same backfill now also fires automatically from `POST
+ * /api/ai/config` when an embeddings key is newly set or changed — this
+ * endpoint remains as the manual/recovery path, e.g. after a mid-run
+ * failure or for accounts that added their key before that existed.)
  */
 export async function POST() {
   try {
     const { supabase, accountId, userId } = await requireRole('admin')
     const limit = checkRateLimit(`ai-kb-reindex:${userId}`, RATE_LIMITS.adminAction)
     if (!limit.success) return rateLimitResponse(limit)
-
-    const { data: docs, error } = await supabase
-      .from('ai_knowledge_documents')
-      .select('id, content')
-      .eq('account_id', accountId)
-    if (error) {
-      console.error('[ai/knowledge/reindex] fetch error:', error)
-      return NextResponse.json(
-        { error: 'Failed to load documents' },
-        { status: 500 },
-      )
-    }
 
     const { key: embeddingsApiKey, corrupt } = await loadEmbeddingsKey(
       supabase,
@@ -50,29 +42,33 @@ export async function POST() {
       )
     }
 
-    let reindexed = 0
-    for (const doc of docs ?? []) {
-      try {
-        await ingestDocument(supabase, accountId, { embeddingsApiKey }, doc.id, doc.content)
-        reindexed += 1
-      } catch (err) {
-        // One bad document (e.g. a mid-run embeddings rate-limit) should
-        // not abort the whole batch.
-        const message = err instanceof AiError ? err.message : String(err)
-        console.error(`[ai/knowledge/reindex] doc ${doc.id} failed:`, message)
-        return NextResponse.json(
-          {
-            success: false,
-            reindexed,
-            total: (docs ?? []).length,
-            error: `Reindexed ${reindexed}, then hit an error: ${message}`,
-          },
-          { status: 200 },
-        )
-      }
+    let result
+    try {
+      result = await reindexAccountDocuments(supabase, accountId, embeddingsApiKey)
+    } catch (err) {
+      console.error('[ai/knowledge/reindex] fetch error:', err)
+      return NextResponse.json(
+        { error: 'Failed to load documents' },
+        { status: 500 },
+      )
     }
 
-    return NextResponse.json({ success: true, reindexed })
+    if (result.error) {
+      // One bad document (e.g. a mid-run embeddings rate-limit) should
+      // not be reported as a hard failure — just stop and say how far it got.
+      console.error(`[ai/knowledge/reindex] stopped after ${result.reindexed}/${result.total}:`, result.error)
+      return NextResponse.json(
+        {
+          success: false,
+          reindexed: result.reindexed,
+          total: result.total,
+          error: `Reindexed ${result.reindexed}, then hit an error: ${result.error}`,
+        },
+        { status: 200 },
+      )
+    }
+
+    return NextResponse.json({ success: true, reindexed: result.reindexed })
   } catch (err) {
     return toErrorResponse(err)
   }

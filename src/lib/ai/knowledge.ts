@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AiConfig } from './types'
+import { AiError } from './types'
 import { chunkText } from './chunk'
 import { embedTexts, toVectorLiteral } from './embeddings'
 
@@ -70,6 +71,44 @@ export async function ingestDocument(
   if (insErr) throw insErr
 
   if (embedError) throw embedError
+}
+
+/**
+ * Re-chunk and re-embed every document in the account. Shared by the
+ * admin-triggered Reindex endpoint and the automatic reindex kicked off
+ * when an account's embeddings key is newly set or changed (existing
+ * documents were ingested before the key existed and stay lexical-only
+ * — embedding: null — until something re-runs `ingestDocument` for
+ * them).
+ *
+ * Stops at the first document that fails to embed (rather than
+ * skipping it and continuing) so a systemic problem — a bad key, a
+ * rate limit — doesn't burn through the whole batch one failure at a
+ * time; the caller can retry via the same reindex.
+ */
+export async function reindexAccountDocuments(
+  db: SupabaseClient,
+  accountId: string,
+  embeddingsApiKey: string | null,
+): Promise<{ reindexed: number; total: number; error?: string }> {
+  const { data: docs, error } = await db
+    .from('ai_knowledge_documents')
+    .select('id, content')
+    .eq('account_id', accountId)
+  if (error) throw error
+
+  const total = docs?.length ?? 0
+  let reindexed = 0
+  for (const doc of docs ?? []) {
+    try {
+      await ingestDocument(db, accountId, { embeddingsApiKey }, doc.id, doc.content)
+      reindexed += 1
+    } catch (err) {
+      const message = err instanceof AiError ? err.message : String(err)
+      return { reindexed, total, error: message }
+    }
+  }
+  return { reindexed, total }
 }
 
 /**

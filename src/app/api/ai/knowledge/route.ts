@@ -12,7 +12,13 @@ import { AiError } from '@/lib/ai/types'
 /**
  * GET /api/ai/knowledge
  *
- * List the account's knowledge-base documents (any member).
+ * List the account's knowledge-base documents (any member). Each
+ * document reports `has_embeddings` so the UI can flag ones that are
+ * still lexical-only (ingested before an embeddings key existed, or a
+ * mid-batch embed failure) instead of leaving that silent. A document's
+ * chunks are always embedded all-or-nothing (`ingestDocument` embeds the
+ * full batch or none of it), so "has at least one embedded chunk" and
+ * "has at least one un-embedded chunk" never both hold for the same doc.
  */
 export async function GET() {
   try {
@@ -29,7 +35,28 @@ export async function GET() {
         { status: 500 },
       )
     }
-    return NextResponse.json({ documents: data ?? [] })
+
+    const documents = data ?? []
+    let unembeddedDocIds = new Set<string>()
+    if (documents.length > 0) {
+      const { data: unembedded, error: chunkErr } = await supabase
+        .from('ai_knowledge_chunks')
+        .select('document_id')
+        .eq('account_id', accountId)
+        .is('embedding', null)
+      if (chunkErr) {
+        console.error('[ai/knowledge GET] chunk status error:', chunkErr)
+      } else {
+        unembeddedDocIds = new Set((unembedded ?? []).map((r) => r.document_id as string))
+      }
+    }
+
+    return NextResponse.json({
+      documents: documents.map((doc) => ({
+        ...doc,
+        has_embeddings: !unembeddedDocIds.has(doc.id),
+      })),
+    })
   } catch (err) {
     return toErrorResponse(err)
   }
