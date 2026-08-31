@@ -104,7 +104,7 @@ vi.mock("./meta-send", () => ({
   engineSendInteractive: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
 }));
 
-import { runAutomationsForTrigger, triggerMatches } from "./engine";
+import { runAutomationsForTrigger, triggerMatches, matchesMessageContent } from "./engine";
 import type { Automation, KeywordMatchTriggerConfig } from "@/types";
 
 const ACCOUNT = "acct-1";
@@ -633,5 +633,69 @@ describe("triggerMatches — keyword_match", () => {
   it("ignores empty keywords and empty messages in `word` mode", () => {
     expect(on(automation({ keywords: [""], match_type: "word" }), "anything")).toBe(false);
     expect(on(automation({ keywords: ["hi"], match_type: "word" }), "")).toBe(false);
+  });
+});
+
+describe("matchesMessageContent — message_content condition", () => {
+  describe("contains (default / unchanged operand)", () => {
+    it("still does a case-insensitive literal substring match", () => {
+      expect(matchesMessageContent(undefined, "refund", "I need a REFUND please")).toBe(true);
+      expect(matchesMessageContent("contains", "refund", "I need a REFUND please")).toBe(true);
+    });
+
+    it("does not match when the substring is absent", () => {
+      expect(matchesMessageContent("contains", "refund", "just saying hello")).toBe(false);
+    });
+  });
+
+  describe("contains_any", () => {
+    it("matches when any comma-separated term is present (multi-term match)", () => {
+      expect(
+        matchesMessageContent("contains_any", "refund, cancel , exchange", "I want to cancel my order"),
+      ).toBe(true);
+    });
+
+    it("does not match when none of the terms are present (no match)", () => {
+      expect(
+        matchesMessageContent("contains_any", "refund,cancel,exchange", "just saying hello"),
+      ).toBe(false);
+    });
+
+    it("trims whitespace and drops empty terms from stray commas", () => {
+      expect(matchesMessageContent("contains_any", "  cancel  ,, ", "please cancel")).toBe(true);
+      // Only empty terms after trimming/filtering — must fail closed, not match everything.
+      expect(matchesMessageContent("contains_any", " , , ", "anything at all")).toBe(false);
+    });
+  });
+
+  describe("Arabic-aware normalization", () => {
+    it("folds alif variants (أ إ آ ٱ) to bare ا on both sides", () => {
+      // Message uses hamza-above alif; search term uses bare alif.
+      expect(matchesMessageContent("contains", "اهلا", "أهلا وسهلا")).toBe(true);
+      // Search term uses hamza-below / madda alif; message uses bare alif.
+      expect(matchesMessageContent("contains", "إهلا", "اهلا وسهلا")).toBe(true);
+      expect(matchesMessageContent("contains", "آسف", "اسف جدا")).toBe(true);
+    });
+
+    it("strips tashkeel (diacritics) before comparing", () => {
+      // Fully-vocalized term must match an un-vocalized message, and vice versa.
+      expect(matchesMessageContent("contains", "مَرْحَباً", "مرحبا بك")).toBe(true);
+      expect(matchesMessageContent("contains", "مرحبا", "أهلا وَمَرْحَباً بكم")).toBe(true);
+    });
+
+    it("folds ة to ه and ى to ي", () => {
+      expect(matchesMessageContent("contains", "مدرسة", "بجوار المدرسه القديمة")).toBe(true);
+      expect(matchesMessageContent("contains", "على", "اتفقنا علي هذا")).toBe(true);
+    });
+
+    it("removes tatweel (ـ)", () => {
+      expect(matchesMessageContent("contains", "مرحبا", "مرحـــبا بك")).toBe(true);
+    });
+
+    it("applies the same normalization inside contains_any terms", () => {
+      expect(
+        matchesMessageContent("contains_any", "إلغاء, مَرْحَباً", "اريد الغاء الطلب"),
+      ).toBe(true);
+    });
   });
 });

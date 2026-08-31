@@ -788,6 +788,62 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
   return true
 }
 
+// Arabic combining marks (tashkeel + Qur'anic annotation marks) stripped
+// before comparison so a customer's un-vocalized "مرحبا" still matches an
+// automation builder's fully-vocalized "مَرْحَباً", and vice versa.
+const ARABIC_DIACRITICS = /[ؐ-ًؚ-ٰٟۖ-ۭ]/g
+// Alif variants that read identically in casual typing (hamza-above,
+// hamza-below, madda, wasla) all fold to bare alif.
+const ALIF_VARIANTS = /[أإآٱ]/g
+const TATWEEL = /ـ/g // ـ — a purely cosmetic elongation character.
+
+/**
+ * Case-insensitive, Arabic-aware normalization shared by both sides of a
+ * `message_content` comparison (the inbound text and every search term),
+ * so spelling variants that read the same to a human match: diacritics,
+ * alif/teh-marbuta/alef-maksura variants, and tatweel are all folded away.
+ * Latin text is just lowercased.
+ */
+function normalizeForMatch(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(ARABIC_DIACRITICS, '')
+    .replace(ALIF_VARIANTS, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(TATWEEL, '')
+}
+
+/**
+ * `message_content` condition matcher.
+ *
+ * `contains` (default, `operand` unset or anything other than
+ * `contains_any`): normalized `value` must be a substring of the
+ * normalized message — unchanged in spirit from before, now just
+ * Arabic-normalized on both sides.
+ *
+ * `contains_any`: `value` is a comma-separated list of terms; matches if
+ * ANY normalized term is a substring of the normalized message. Empty
+ * terms (blank entries from stray commas) are dropped rather than
+ * matching everything.
+ */
+export function matchesMessageContent(
+  operand: string | undefined,
+  value: string | undefined,
+  messageText: string,
+): boolean {
+  const text = normalizeForMatch(messageText)
+  if (operand === 'contains_any') {
+    const terms = (value ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map(normalizeForMatch)
+    return terms.some((term) => text.includes(term))
+  }
+  return text.includes(normalizeForMatch(value ?? ''))
+}
+
 async function evaluateCondition(cfg: ConditionStepConfig, args: ExecuteArgs): Promise<boolean> {
   const db = supabaseAdmin()
   switch (cfg.subject) {
@@ -818,7 +874,7 @@ async function evaluateCondition(cfg: ConditionStepConfig, args: ExecuteArgs): P
     }
     case 'message_content': {
       const text = (args.context.message_text ?? '').toString()
-      return text.toLowerCase().includes((cfg.value ?? '').toLowerCase())
+      return matchesMessageContent(cfg.operand, cfg.value, text)
     }
     case 'time_of_day': {
       // operand form "HH:mm-HH:mm" — true if now is within that window
