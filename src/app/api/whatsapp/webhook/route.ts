@@ -851,8 +851,19 @@ async function processMessage(
   // logging zero steps. `runAutomationsForTrigger` owns its own try/catch
   // and never throws; the `.catch` is belt-and-braces so one trigger
   // type's failure can't skip the rest of the loop.
+  //
+  // `sentReply` is tracked so the AI auto-reply gate below can stand down
+  // only when a `new_message_received` / `keyword_match` automation
+  // actually put (or is still on track to put, via a parked `wait` step) a
+  // message in front of the customer for THIS inbound — not merely
+  // because such an automation exists and is active. An automation whose
+  // condition didn't match, or that only tags/updates the contact, must
+  // not silently suppress the AI (issue: AI stopped replying whenever any
+  // active new_message_received automation existed, regardless of what it
+  // actually did).
+  let automationSentReply = false
   for (const triggerType of automationTriggers) {
-    await runAutomationsForTrigger({
+    const result = await runAutomationsForTrigger({
       accountId,
       triggerType,
       contactId: contactRecord.id,
@@ -863,7 +874,16 @@ async function processMessage(
         // trigger's exact-id match.
         interactive_reply_id: interactiveReplyId ?? undefined,
       },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    }).catch((err) => {
+      console.error('[automations] dispatch failed:', err)
+      return undefined
+    })
+    if (
+      (triggerType === 'new_message_received' || triggerType === 'keyword_match') &&
+      result?.sentReply
+    ) {
+      automationSentReply = true
+    }
   }
 
   // AI auto-reply. Runs only for plain-text inbound the deterministic
@@ -877,6 +897,7 @@ async function processMessage(
       conversationId: conversation.id,
       contactId: contactRecord.id,
       configOwnerUserId,
+      automationSentReply,
     })
   }
 

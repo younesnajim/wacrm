@@ -175,6 +175,91 @@ describe("runAutomationsForTrigger — tenant isolation", () => {
   });
 });
 
+describe("runAutomationsForTrigger — sentReply (AI auto-reply gate)", () => {
+  // Regression coverage for the bug where the AI auto-reply gate checked
+  // "does an active automation exist on this trigger" instead of "did an
+  // automation actually reply to this message" — silencing the AI even
+  // when the automation's condition never matched, or it only wrote tags
+  // / deals. `sentReply` is the signal `dispatchInboundToAiReply` now
+  // gates on instead (see src/lib/ai/auto-reply.ts).
+
+  it("is false when the matched automation never reaches a send step (tag/deal-only)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [updateStep()];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: false });
+  });
+
+  it("is true when the matched automation completes a send_message step", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [{
+      id: "s1",
+      automation_id: "a1",
+      step_type: "send_message",
+      position: 0,
+      parent_step_id: null,
+      step_config: { text: "On it!" },
+    }];
+
+    // Context-supplied conversation_id short-circuits the DB lookup in
+    // resolveConversationId — keeps this test independent of a
+    // `conversations` table mock.
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { conversation_id: "conv-1" },
+    });
+
+    expect(result).toEqual({ sentReply: true });
+  });
+
+  it("is true when the run parks at a `wait` step — it could still send on resume", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [{
+      id: "s1",
+      automation_id: "a1",
+      step_type: "wait",
+      position: 0,
+      parent_step_id: null,
+      step_config: { amount: 10, unit: "minutes" },
+    }];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: true });
+  });
+
+  it("is false when no automation matches the trigger at all", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = []; // fetch returns nothing active on this trigger
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: false });
+  });
+});
+
 describe("automation_logs — status is seeded pessimistically (issue #409)", () => {
   it("writes the log row as 'failed' before any step runs", async () => {
     h.state.owned = { id: "c1" };

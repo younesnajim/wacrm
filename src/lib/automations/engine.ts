@@ -25,6 +25,16 @@ import { engineSendText, engineSendTemplate, engineSendInteractive } from './met
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 
+// Step types that put a message in front of the customer. Used to tell
+// the AI auto-reply path whether an automation actually replied to this
+// inbound (vs. merely being active on the trigger — see `dispatchInboundToAiReply`).
+const SEND_STEP_TYPES = new Set<AutomationStep['step_type']>([
+  'send_message',
+  'send_buttons',
+  'send_list',
+  'send_template',
+])
+
 // ------------------------------------------------------------
 // Public API
 // ------------------------------------------------------------
@@ -56,6 +66,17 @@ export interface DispatchInput {
   context?: AutomationContext
 }
 
+export interface DispatchResult {
+  /** True when at least one matching automation actually put a message
+   *  in front of the customer this run — either a send-type step
+   *  completed, or a run parked at a `wait` step that (on resume) could
+   *  still lead to one. Used by the AI auto-reply gate to stand down
+   *  only when an automation genuinely replied, not merely because one
+   *  exists and is active. False on any dispatch-level failure (nothing
+   *  ran, so there's nothing to avoid double-texting). */
+  sentReply: boolean
+}
+
 /**
  * Fire all active automations matching the given trigger for an
  * account.
@@ -64,7 +85,7 @@ export interface DispatchInput {
  * All errors are caught and logged; per-automation failures are
  * recorded into automation_logs with status='failed'.
  */
-export async function runAutomationsForTrigger(input: DispatchInput): Promise<void> {
+export async function runAutomationsForTrigger(input: DispatchInput): Promise<DispatchResult> {
   try {
     const db = supabaseAdmin()
 
@@ -84,11 +105,11 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
         .maybeSingle()
       if (ownErr) {
         console.error('[automations] contact ownership check failed:', ownErr)
-        return
+        return { sentReply: false }
       }
       if (!owned) {
         console.warn('[automations] contact not in account, refusing dispatch', input.contactId)
-        return
+        return { sentReply: false }
       }
     }
 
@@ -101,20 +122,24 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
 
     if (error) {
       console.error('[automations] fetch failed:', error)
-      return
+      return { sentReply: false }
     }
-    if (!automations || automations.length === 0) return
+    if (!automations || automations.length === 0) return { sentReply: false }
 
+    let sentReply = false
     for (const automation of automations as Automation[]) {
       if (!triggerMatches(automation, input.context)) continue
       try {
-        await executeAutomation(automation, input)
+        const result = await executeAutomation(automation, input)
+        if (result.sent || result.waiting) sentReply = true
       } catch (err) {
         console.error('[automations] execute failed:', automation.id, err)
       }
     }
+    return { sentReply }
   } catch (err) {
     console.error('[automations] dispatch failed:', err)
+    return { sentReply: false }
   }
 }
 
@@ -173,7 +198,20 @@ export async function resumePendingExecution(pending: {
 // Internal execution
 // ------------------------------------------------------------
 
-async function executeAutomation(automation: Automation, input: DispatchInput) {
+interface StepRunOutcome {
+  /** A send-type step (send_message/send_buttons/send_list/send_template)
+   *  completed successfully somewhere in this run (including inside a
+   *  condition branch). */
+  sent: boolean
+  /** The run parked at a `wait` step — no send has happened yet, but the
+   *  resumed run (via cron) could still reach one. */
+  waiting: boolean
+}
+
+async function executeAutomation(
+  automation: Automation,
+  input: DispatchInput,
+): Promise<StepRunOutcome> {
   const db = supabaseAdmin()
 
   const { data: log, error: logErr } = await db
@@ -204,10 +242,10 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
 
   if (logErr || !log) {
     console.error('[automations] cannot create log:', logErr)
-    return
+    return { sent: false, waiting: false }
   }
 
-  await executeStepsFrom({
+  const outcome = await executeStepsFrom({
     automation,
     contactId: input.contactId ?? null,
     context: input.context ?? {},
@@ -228,6 +266,8 @@ async function executeAutomation(automation: Automation, input: DispatchInput) {
   if (rpcErr) {
     console.error('[automations] increment counter failed:', rpcErr)
   }
+
+  return outcome
 }
 
 interface ExecuteArgs {
@@ -241,7 +281,7 @@ interface ExecuteArgs {
   triggerEvent: string
 }
 
-async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
+async function executeStepsFrom(args: ExecuteArgs): Promise<StepRunOutcome> {
   const db = supabaseAdmin()
 
   const baseQuery = db
@@ -260,18 +300,20 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
 
   if (stepsErr) {
     await finalizeLog(args.logId, 'failed', stepsErr.message)
-    return
+    return { sent: false, waiting: false }
   }
   if (!steps || steps.length === 0) {
     if (args.parentStepId === null && args.logId) {
       await finalizeLog(args.logId, 'success', null)
     }
-    return
+    return { sent: false, waiting: false }
   }
 
   const results: AutomationLogStepResult[] = []
   let status: 'success' | 'partial' | 'failed' = 'success'
   let errorMessage: string | null = null
+  let sent = false
+  let waiting = false
 
   for (const step of steps as AutomationStep[]) {
     // `wait` is the suspension point: enqueue and stop processing this
@@ -301,7 +343,9 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       })
       status = 'partial'
       await appendResults(args.logId, results, status, errorMessage)
-      return
+      // Parked, not sent yet — the resumed run (cron) could still reach
+      // a send step, so the caller treats this like a reply in flight.
+      return { sent, waiting: true }
     }
 
     try {
@@ -316,17 +360,27 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         })
         // Recurse into the chosen branch at position 0 (children use their
         // own ordering within the branch scope).
-        await executeStepsFrom({
+        const branchOutcome = await executeStepsFrom({
           ...args,
           parentStepId: step.id,
           branch: taken ? 'yes' : 'no',
           startPosition: 0,
           logId: args.logId,
         })
+        // A send/wait inside a branch counts for the whole run — the
+        // caller only cares whether the customer saw (or might still
+        // see) a reply, not which branch produced it. The branch's own
+        // `wait` handling (if any) already appended+finalized its own
+        // scope; this just carries the flags up. Control flow is
+        // untouched — siblings after the condition step in THIS scope
+        // still run, exactly as before this change.
+        if (branchOutcome.sent) sent = true
+        if (branchOutcome.waiting) waiting = true
         continue
       }
 
       const detail = await runStep(step, args)
+      if (SEND_STEP_TYPES.has(step.step_type)) sent = true
       results.push({
         step_id: step.id,
         step_type: step.step_type,
@@ -353,6 +407,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
     // Nested branch — just append results; parent scope decides final status.
     await appendResults(args.logId, results, null, errorMessage)
   }
+  return { sent, waiting }
 }
 
 async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string> {

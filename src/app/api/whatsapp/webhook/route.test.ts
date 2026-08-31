@@ -274,10 +274,10 @@ beforeEach(() => {
   h.dispatchWebhookEvent.mockResolvedValue(undefined)
   h.runAutomationsForTrigger.mockImplementation(() => {
     h.state.automationStarted++
-    return new Promise<void>((resolve) => {
+    return new Promise<{ sentReply: boolean }>((resolve) => {
       setTimeout(() => {
         h.state.automationCompleted++
-        resolve()
+        resolve({ sentReply: false })
       }, 0)
     })
   })
@@ -536,5 +536,34 @@ describe('inbound webhook: after() awaits automations (#368)', () => {
     // If the dispatches were fire-and-forget, completed would still be 0
     // here — the callback would have resolved before the timers fired.
     expect(h.state.automationCompleted).toBe(3)
+  })
+})
+
+describe('inbound webhook: an active automation does not block the AI unless it actually replies', () => {
+  it('an active new_message_received automation whose condition did not match (or is tag-only) still lets the AI reply', async () => {
+    // Every trigger dispatch — including new_message_received — resolves
+    // sentReply: false, mirroring an automation that exists and is
+    // active but whose run this time never reached a send step (branch
+    // not taken, or the automation only tags/updates the contact).
+    h.runAutomationsForTrigger.mockResolvedValue({ sentReply: false })
+
+    await runWebhook()
+
+    expect(h.dispatchInboundToAiReply).toHaveBeenCalledWith(
+      expect.objectContaining({ automationSentReply: false }),
+    )
+  })
+
+  it('an automation that actually sent a reply for this inbound stands the AI down', async () => {
+    h.runAutomationsForTrigger.mockImplementation(
+      ({ triggerType }: { triggerType: string }) =>
+        Promise.resolve({ sentReply: triggerType === 'new_message_received' }),
+    )
+
+    await runWebhook()
+
+    expect(h.dispatchInboundToAiReply).toHaveBeenCalledWith(
+      expect.objectContaining({ automationSentReply: true }),
+    )
   })
 })
