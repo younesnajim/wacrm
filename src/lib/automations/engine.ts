@@ -23,7 +23,7 @@ import { addContactTagIfAbsent } from '@/lib/contacts/tag-write'
 import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
-import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { isDeliverableUrlDetailed } from '@/lib/webhooks/ssrf'
 
 // Step types that put a message in front of the customer. Used to tell
 // the AI auto-reply path whether an automation actually replied to this
@@ -653,8 +653,22 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // server makes the request, so refuse any destination that resolves
       // to a private / loopback / link-local / reserved address. Mirrors
       // the webhook_endpoints delivery path (see lib/webhooks/deliver.ts).
-      if (!(await isDeliverableUrl(cfg.url))) {
+      // WEBHOOK_ALLOWED_HOSTS lets an operator explicitly trust specific
+      // internal destinations (e.g. a sibling Docker service reachable
+      // only by its internal hostname) — see lib/webhooks/ssrf.ts. When
+      // that's what let this request through, it's logged: an operator
+      // override on an SSRF guard must never be silent.
+      const deliverability = await isDeliverableUrlDetailed(cfg.url)
+      if (!deliverability.allowed) {
         throw new Error('send_webhook: destination not allowed')
+      }
+      const allowlistNote = deliverability.viaAllowlist
+        ? ' (destination allowed via WEBHOOK_ALLOWED_HOSTS)'
+        : ''
+      if (deliverability.viaAllowlist) {
+        console.warn(
+          `[automations] send_webhook: WEBHOOK_ALLOWED_HOSTS permitted an otherwise-blocked destination for automation ${args.automation.id}: ${cfg.url}`,
+        )
       }
       const body = cfg.body_template ? interpolate(cfg.body_template, args) : JSON.stringify(args.context)
       const res = await fetch(cfg.url, {
@@ -667,8 +681,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         redirect: 'manual',
         signal: AbortSignal.timeout(10_000),
       })
-      if (!res.ok) throw new Error(`webhook returned ${res.status}`)
-      return `webhook ${res.status}`
+      if (!res.ok) throw new Error(`webhook returned ${res.status}${allowlistNote}`)
+      return `webhook ${res.status}${allowlistNote}`
     }
 
     case 'close_conversation': {

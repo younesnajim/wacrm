@@ -594,6 +594,41 @@ describe("send_webhook — SSRF guard (GHSA-8jqh-598v-rfxc)", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("delivers to an otherwise-blocked destination once WEBHOOK_ALLOWED_HOSTS lists it, and logs the override", async () => {
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    // A private-range IP literal, not a hostname — exercises the exact
+    // same "guard would normally block this" path as the Docker-internal
+    // hostname case (both fail isPubliclyDeliverable), without a real
+    // DNS lookup in this test.
+    vi.stubEnv("WEBHOOK_ALLOWED_HOSTS", "10.0.5.23:5678");
+
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [webhookStep("http://10.0.5.23:5678/webhook/abc")];
+
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // The execution log's step detail records that the allowlist (not
+    // the normal guard) is what let this destination through.
+    const lastLogUpdate = h.state.logUpdates.at(-1) as {
+      steps_executed?: { detail?: string }[];
+    };
+    expect(lastLogUpdate.steps_executed?.[0]?.detail).toContain(
+      "WEBHOOK_ALLOWED_HOSTS",
+    );
+
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 });
 
 function webhookStep(url: string) {
