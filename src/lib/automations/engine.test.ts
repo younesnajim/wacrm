@@ -223,28 +223,6 @@ describe("runAutomationsForTrigger — sentReply (AI auto-reply gate)", () => {
     expect(result).toEqual({ sentReply: true });
   });
 
-  it("is true when the run parks at a `wait` step — it could still send on resume", async () => {
-    h.state.owned = { id: "c1" };
-    h.state.automations = [automationWithUpdateStep()];
-    h.state.steps = [{
-      id: "s1",
-      automation_id: "a1",
-      step_type: "wait",
-      position: 0,
-      parent_step_id: null,
-      step_config: { amount: 10, unit: "minutes" },
-    }];
-
-    const result = await runAutomationsForTrigger({
-      accountId: ACCOUNT,
-      triggerType: "new_message_received",
-      contactId: "c1",
-      context: {},
-    });
-
-    expect(result).toEqual({ sentReply: true });
-  });
-
   it("is false when no automation matches the trigger at all", async () => {
     h.state.owned = { id: "c1" };
     h.state.automations = []; // fetch returns nothing active on this trigger
@@ -257,6 +235,171 @@ describe("runAutomationsForTrigger — sentReply (AI auto-reply gate)", () => {
     });
 
     expect(result).toEqual({ sentReply: false });
+  });
+});
+
+describe("runAutomationsForTrigger — sentReply: static look-ahead past a `wait`", () => {
+  // Regression coverage for the bug where a parked `wait` ALWAYS reported
+  // sentReply: true, even when nothing reachable from its resume point
+  // ever sends a message (e.g. wait -> add_tag). That left the AI silent
+  // for a reply that was never coming. `hasReachableSend` in engine.ts
+  // now does a pure static walk of the step tree from the wait's resume
+  // point before deciding.
+
+  it("wait -> send: stand down (a send is reachable after the wait)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 0,
+        parent_step_id: null,
+        step_config: { amount: 10, unit: "minutes" },
+      },
+      {
+        id: "send1",
+        automation_id: "a1",
+        step_type: "send_message",
+        position: 1,
+        parent_step_id: null,
+        step_config: { text: "Following up!" },
+      },
+    ];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: true });
+  });
+
+  it("wait -> tag only: the AI replies now (nothing reachable ever sends)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 0,
+        parent_step_id: null,
+        step_config: { amount: 2, unit: "minutes" },
+      },
+      {
+        id: "tag1",
+        automation_id: "a1",
+        step_type: "add_tag",
+        position: 1,
+        parent_step_id: null,
+        step_config: { tag_id: "tag-vip" },
+      },
+    ];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: false });
+  });
+
+  it("wait -> condition with a send on only one branch: stand down (reachable on any branch)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 0,
+        parent_step_id: null,
+        step_config: { amount: 5, unit: "minutes" },
+      },
+      {
+        id: "cond1",
+        automation_id: "a1",
+        step_type: "condition",
+        position: 1,
+        parent_step_id: null,
+        step_config: { subject: "message_content", operand: "contains", value: "x" },
+      },
+      // "yes" branch: silent only.
+      {
+        id: "tag1",
+        automation_id: "a1",
+        step_type: "add_tag",
+        position: 0,
+        parent_step_id: "cond1",
+        branch: "yes",
+        step_config: { tag_id: "tag-vip" },
+      },
+      // "no" branch: reaches a send.
+      {
+        id: "send1",
+        automation_id: "a1",
+        step_type: "send_message",
+        position: 0,
+        parent_step_id: "cond1",
+        branch: "no",
+        step_config: { text: "Still there?" },
+      },
+    ];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: true });
+  });
+
+  it("wait -> wait -> send: stand down (a nested wait is traversed, not a terminator)", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 0,
+        parent_step_id: null,
+        step_config: { amount: 1, unit: "minutes" },
+      },
+      {
+        id: "wait2",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 1,
+        parent_step_id: null,
+        step_config: { amount: 1, unit: "hours" },
+      },
+      {
+        id: "send1",
+        automation_id: "a1",
+        step_type: "send_message",
+        position: 2,
+        parent_step_id: null,
+        step_config: { text: "Checking in" },
+      },
+    ];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: {},
+    });
+
+    expect(result).toEqual({ sentReply: true });
   });
 });
 
