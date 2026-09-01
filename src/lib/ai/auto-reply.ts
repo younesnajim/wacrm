@@ -19,17 +19,17 @@ interface DispatchArgs {
    *  audit columns (mirrors how the flow runner passes it through). */
   configOwnerUserId: string
   /** True when a `new_message_received` / `keyword_match` automation
-   *  already sent (or parked at a `wait` step that could still lead to)
-   *  a reply for this exact inbound — computed by the webhook route from
-   *  `runAutomationsForTrigger`'s result, which runs synchronously before
-   *  this. Deterministic, user-configured responders win over the LLM,
-   *  so when true we stand down to avoid double-texting the customer.
-   *  An automation that merely EXISTS and is active, but didn't match or
-   *  never reaches a send step (e.g. its condition took the other
-   *  branch, or it only tags/updates the contact), does NOT set this —
-   *  the AI still replies. (Relationship triggers like
-   *  `first_inbound_message` never set this — they're not per-message
-   *  auto-responders.) */
+   *  already sent a reply for this exact inbound IN THE SAME synchronous
+   *  run — computed by the webhook route from `runAutomationsForTrigger`'s
+   *  result, which runs synchronously before this. Deterministic,
+   *  user-configured responders win over the LLM, so when true we stand
+   *  down to avoid double-texting the customer right now. An automation
+   *  that merely EXISTS and is active, but didn't match, never reaches a
+   *  send step, or only reaches one after parking at a `wait` (a send
+   *  that lands minutes/hours later isn't competing with the immediate
+   *  reply), does NOT set this — the AI still replies. (Relationship
+   *  triggers like `first_inbound_message` never set this — they're not
+   *  per-message auto-responders.) */
   automationSentReply: boolean
 }
 

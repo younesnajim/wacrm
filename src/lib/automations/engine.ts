@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   Automation,
   AutomationLogStepResult,
@@ -69,12 +68,15 @@ export interface DispatchInput {
 
 export interface DispatchResult {
   /** True when at least one matching automation actually put a message
-   *  in front of the customer this run — either a send-type step
-   *  completed, or a run parked at a `wait` step that (on resume) could
-   *  still lead to one. Used by the AI auto-reply gate to stand down
-   *  only when an automation genuinely replied, not merely because one
-   *  exists and is active. False on any dispatch-level failure (nothing
-   *  ran, so there's nothing to avoid double-texting). */
+   *  in front of the customer in THIS SAME synchronous run, before any
+   *  `wait` it may have hit. Used by the AI auto-reply gate to stand
+   *  down only when an automation genuinely replied right now, not
+   *  merely because one exists and is active — and not because one is
+   *  scheduled to reply later. A send that only happens after a `wait`
+   *  resumes (minutes/hours later, on a separate cron-driven pass) is
+   *  not competing with the immediate reply, so it does NOT set this.
+   *  False on any dispatch-level failure (nothing ran, so there's
+   *  nothing to avoid double-texting). */
   sentReply: boolean
 }
 
@@ -132,7 +134,7 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<Di
       if (!triggerMatches(automation, input.context)) continue
       try {
         const result = await executeAutomation(automation, input)
-        if (result.sent || result.waiting) sentReply = true
+        if (result.sent) sentReply = true
       } catch (err) {
         console.error('[automations] execute failed:', automation.id, err)
       }
@@ -201,12 +203,13 @@ export async function resumePendingExecution(pending: {
 
 interface StepRunOutcome {
   /** A send-type step (send_message/send_buttons/send_list/send_template)
-   *  completed successfully somewhere in this run (including inside a
-   *  condition branch). */
+   *  completed successfully somewhere in this SAME synchronous run
+   *  (including inside a condition branch), before any `wait` was hit.
+   *  This is the only signal the AI auto-reply gate cares about — a send
+   *  that only happens after a `wait` resumes (minutes/hours later, on a
+   *  separate cron-driven pass) is not competing with the immediate
+   *  reply, so parking at a `wait` never sets this. */
   sent: boolean
-  /** The run parked at a `wait` step — no send has happened yet, but the
-   *  resumed run (via cron) could still reach one. */
-  waiting: boolean
 }
 
 async function executeAutomation(
@@ -243,7 +246,7 @@ async function executeAutomation(
 
   if (logErr || !log) {
     console.error('[automations] cannot create log:', logErr)
-    return { sent: false, waiting: false }
+    return { sent: false }
   }
 
   const outcome = await executeStepsFrom({
@@ -301,20 +304,19 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<StepRunOutcome> {
 
   if (stepsErr) {
     await finalizeLog(args.logId, 'failed', stepsErr.message)
-    return { sent: false, waiting: false }
+    return { sent: false }
   }
   if (!steps || steps.length === 0) {
     if (args.parentStepId === null && args.logId) {
       await finalizeLog(args.logId, 'success', null)
     }
-    return { sent: false, waiting: false }
+    return { sent: false }
   }
 
   const results: AutomationLogStepResult[] = []
   let status: 'success' | 'partial' | 'failed' = 'success'
   let errorMessage: string | null = null
   let sent = false
-  let waiting = false
 
   for (const step of steps as AutomationStep[]) {
     // `wait` is the suspension point: enqueue and stop processing this
@@ -344,21 +346,13 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<StepRunOutcome> {
       })
       status = 'partial'
       await appendResults(args.logId, results, status, errorMessage)
-      // Parked, not sent yet. Whether the caller should treat this like
-      // a reply in flight depends on whether a send is actually
-      // reachable from here — a wait followed only by add_tag/
-      // update_contact_field/etc. never sends anything, and standing
-      // the AI down for that would leave the customer with no reply at
-      // all. Static look-ahead only: no step execution, no condition
-      // evaluation, no writes.
-      const reachesSend = await hasReachableSend(
-        db,
-        args.automation.id,
-        args.parentStepId,
-        args.branch,
-        step.position + 1,
-      )
-      return { sent, waiting: reachesSend }
+      // A send that only happens after this wait resumes lands minutes
+      // or hours later, on a separate cron-driven pass — it is not
+      // competing with the immediate reply, so it must not silence the
+      // AI now. `sent` already reflects only what actually executed in
+      // THIS synchronous run before hitting the wait, so it's returned
+      // as-is; there is no look-ahead past this point.
+      return { sent }
     }
 
     try {
@@ -380,15 +374,15 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<StepRunOutcome> {
           startPosition: 0,
           logId: args.logId,
         })
-        // A send/wait inside a branch counts for the whole run — the
-        // caller only cares whether the customer saw (or might still
-        // see) a reply, not which branch produced it. The branch's own
-        // `wait` handling (if any) already appended+finalized its own
-        // scope; this just carries the flags up. Control flow is
+        // A send inside the taken branch counts for the whole run — the
+        // caller only cares whether the customer saw a reply this run,
+        // not which branch produced it. If the branch instead parked at
+        // a `wait`, `branchOutcome.sent` only reflects what ran before
+        // that wait (possibly nothing), which is exactly right — a send
+        // behind the branch's wait doesn't count either. Control flow is
         // untouched — siblings after the condition step in THIS scope
-        // still run, exactly as before this change.
+        // still run regardless.
         if (branchOutcome.sent) sent = true
-        if (branchOutcome.waiting) waiting = true
         continue
       }
 
@@ -420,74 +414,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<StepRunOutcome> {
     // Nested branch — just append results; parent scope decides final status.
     await appendResults(args.logId, results, null, errorMessage)
   }
-  return { sent, waiting }
-}
-
-/**
- * Does any execution path starting at `(parentStepId, branch,
- * fromPosition)` in this automation's step tree contain a send-type
- * step (send_message/send_buttons/send_list/send_template)? Used only
- * to decide whether a parked `wait` should make the AI auto-reply gate
- * stand down (see `runAutomationsForTrigger`'s `sentReply`) — a wait
- * followed only by silent steps (add_tag, update_contact_field,
- * create_deal, assign_conversation, close_conversation, send_webhook)
- * never puts a message in front of the customer.
- *
- * Pure static analysis: one read of `automation_steps`, then an
- * in-memory tree walk. Never executes a step, never evaluates a
- * `condition`'s runtime config, never writes anything.
- *
- * Conservative by design: a `condition` checks BOTH branches —
- * reachable on EITHER counts, since standing the AI down is the safer
- * error than leaving the customer with no reply. A further `wait`
- * doesn't terminate the search either — steps after it in the same
- * scope are still on the eventual path once that wait resumes too, so
- * the walk just steps over it, same as any other non-send step.
- *
- * Fails safe: if the steps can't be loaded, reachability can't be
- * disproven, so this reports `true` (stand down) rather than risk
- * silencing the AI for a reply that's actually still coming.
- */
-async function hasReachableSend(
-  db: SupabaseClient,
-  automationId: string,
-  parentStepId: string | null,
-  branch: 'yes' | 'no' | null,
-  fromPosition: number,
-): Promise<boolean> {
-  const { data: steps, error } = await db
-    .from('automation_steps')
-    .select('*')
-    .eq('automation_id', automationId)
-  if (error || !steps) return true
-  return stepsReachSend(steps as AutomationStep[], parentStepId, branch, fromPosition)
-}
-
-function stepsReachSend(
-  allSteps: AutomationStep[],
-  parentStepId: string | null,
-  branch: 'yes' | 'no' | null,
-  fromPosition: number,
-): boolean {
-  const scoped = allSteps
-    .filter((s) =>
-      parentStepId === null
-        ? s.parent_step_id == null
-        : s.parent_step_id === parentStepId && (s.branch ?? 'yes') === branch,
-    )
-    .filter((s) => s.position >= fromPosition)
-    .sort((a, b) => a.position - b.position)
-
-  for (const step of scoped) {
-    if (SEND_STEP_TYPES.has(step.step_type)) return true
-    if (step.step_type === 'condition') {
-      if (stepsReachSend(allSteps, step.id, 'yes', 0)) return true
-      if (stepsReachSend(allSteps, step.id, 'no', 0)) return true
-    }
-    // wait, and every silent step type — doesn't block the search;
-    // keep scanning forward in this same scope.
-  }
-  return false
+  return { sent }
 }
 
 async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string> {

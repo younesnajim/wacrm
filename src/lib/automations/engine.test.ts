@@ -57,7 +57,24 @@ vi.mock("./admin-client", () => {
       }
       return { data: { steps_executed: [], status: "success" }, error: null };
     }
-    if (table === "automation_steps") return { data: state.steps, error: null };
+    if (table === "automation_steps") {
+      // Real scoping matters here: `executeStepsFrom` recurses into
+      // condition branches by re-querying this table with a narrower
+      // (parent_step_id, branch, position) filter, and — unlike every
+      // other table this mock backs — that recursion is REAL, not a
+      // pure in-memory walk. A mock that ignores the filters and always
+      // hands back every row (including the very `condition` step that
+      // triggered the recursive query) makes that step reappear inside
+      // its own branch scope, which evaluates it again, which recurses
+      // again — an infinite loop that only stops at an OOM crash.
+      let rows = state.steps as Record<string, unknown>[];
+      for (const [op, key, value] of ops.filters) {
+        if (op === "eq") rows = rows.filter((r) => r[key] === value);
+        else if (op === "is") rows = rows.filter((r) => r[key] == null);
+        else if (op === "gte") rows = rows.filter((r) => (r[key] as number) >= (value as number));
+      }
+      return { data: rows, error: null };
+    }
     return { data: null, error: null };
   }
 
@@ -75,8 +92,8 @@ vi.mock("./admin-client", () => {
       delete: () => ((ops.type = "delete"), b),
       upsert: (p: unknown) => ((ops.type = "upsert"), (ops.payload = p), b),
       eq: (k: string, v: unknown) => (ops.filters.push(["eq", k, v]), b),
-      gte: () => b,
-      is: () => b,
+      gte: (k: string, v: unknown) => (ops.filters.push(["gte", k, v]), b),
+      is: (k: string, v: unknown) => (ops.filters.push(["is", k, v]), b),
       order: () => b,
       limit: () => b,
       single: () => Promise.resolve(resolve(ops)),
@@ -238,15 +255,16 @@ describe("runAutomationsForTrigger — sentReply (AI auto-reply gate)", () => {
   });
 });
 
-describe("runAutomationsForTrigger — sentReply: static look-ahead past a `wait`", () => {
-  // Regression coverage for the bug where a parked `wait` ALWAYS reported
-  // sentReply: true, even when nothing reachable from its resume point
-  // ever sends a message (e.g. wait -> add_tag). That left the AI silent
-  // for a reply that was never coming. `hasReachableSend` in engine.ts
-  // now does a pure static walk of the step tree from the wait's resume
-  // point before deciding.
+describe("runAutomationsForTrigger — sentReply: a `wait` never stands the AI down on its own", () => {
+  // Regression coverage for the bug where a send reachable AFTER a `wait`
+  // (via a prior static look-ahead) still reported sentReply: true, even
+  // though that send lands minutes/hours later on a separate cron-driven
+  // pass — not competing with the immediate reply. The rule now is
+  // purely "did a send step actually execute in THIS synchronous run,
+  // before any wait was hit" — parking never contributes true, no matter
+  // what's scheduled to happen after it.
 
-  it("wait -> send: stand down (a send is reachable after the wait)", async () => {
+  it("wait -> send: does NOT stand down — the send is deferred behind the wait", async () => {
     h.state.owned = { id: "c1" };
     h.state.automations = [automationWithUpdateStep()];
     h.state.steps = [
@@ -275,10 +293,10 @@ describe("runAutomationsForTrigger — sentReply: static look-ahead past a `wait
       context: {},
     });
 
-    expect(result).toEqual({ sentReply: true });
+    expect(result).toEqual({ sentReply: false });
   });
 
-  it("wait -> tag only: the AI replies now (nothing reachable ever sends)", async () => {
+  it("wait -> tag only: the AI replies now (nothing ever sends)", async () => {
     h.state.owned = { id: "c1" };
     h.state.automations = [automationWithUpdateStep()];
     h.state.steps = [
@@ -310,59 +328,7 @@ describe("runAutomationsForTrigger — sentReply: static look-ahead past a `wait
     expect(result).toEqual({ sentReply: false });
   });
 
-  it("wait -> condition with a send on only one branch: stand down (reachable on any branch)", async () => {
-    h.state.owned = { id: "c1" };
-    h.state.automations = [automationWithUpdateStep()];
-    h.state.steps = [
-      {
-        id: "wait1",
-        automation_id: "a1",
-        step_type: "wait",
-        position: 0,
-        parent_step_id: null,
-        step_config: { amount: 5, unit: "minutes" },
-      },
-      {
-        id: "cond1",
-        automation_id: "a1",
-        step_type: "condition",
-        position: 1,
-        parent_step_id: null,
-        step_config: { subject: "message_content", operand: "contains", value: "x" },
-      },
-      // "yes" branch: silent only.
-      {
-        id: "tag1",
-        automation_id: "a1",
-        step_type: "add_tag",
-        position: 0,
-        parent_step_id: "cond1",
-        branch: "yes",
-        step_config: { tag_id: "tag-vip" },
-      },
-      // "no" branch: reaches a send.
-      {
-        id: "send1",
-        automation_id: "a1",
-        step_type: "send_message",
-        position: 0,
-        parent_step_id: "cond1",
-        branch: "no",
-        step_config: { text: "Still there?" },
-      },
-    ];
-
-    const result = await runAutomationsForTrigger({
-      accountId: ACCOUNT,
-      triggerType: "new_message_received",
-      contactId: "c1",
-      context: {},
-    });
-
-    expect(result).toEqual({ sentReply: true });
-  });
-
-  it("wait -> wait -> send: stand down (a nested wait is traversed, not a terminator)", async () => {
+  it("wait -> wait -> send: still does NOT stand down (a further wait doesn't change anything)", async () => {
     h.state.owned = { id: "c1" };
     h.state.automations = [automationWithUpdateStep()];
     h.state.steps = [
@@ -397,6 +363,104 @@ describe("runAutomationsForTrigger — sentReply: static look-ahead past a `wait
       triggerType: "new_message_received",
       contactId: "c1",
       context: {},
+    });
+
+    expect(result).toEqual({ sentReply: false });
+  });
+
+  it("condition -> yes: tag/field, wait, send — the exact production repro: AI replies now, nudge lands later", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "cond1",
+        automation_id: "a1",
+        step_type: "condition",
+        position: 0,
+        parent_step_id: null,
+        step_config: { subject: "message_content", operand: "contains", value: "x" },
+      },
+      // "yes" branch: several silent steps, THEN a wait, THEN a send —
+      // none of the silent steps are send-type, and the send only runs
+      // after the wait resumes.
+      {
+        id: "tag1",
+        automation_id: "a1",
+        step_type: "add_tag",
+        position: 0,
+        parent_step_id: "cond1",
+        branch: "yes",
+        step_config: { tag_id: "tag-vip" },
+      },
+      {
+        id: "field1",
+        automation_id: "a1",
+        step_type: "update_contact_field",
+        position: 1,
+        parent_step_id: "cond1",
+        branch: "yes",
+        step_config: { field: "company", value: "Acme" },
+      },
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 2,
+        parent_step_id: "cond1",
+        branch: "yes",
+        step_config: { amount: 10, unit: "minutes" },
+      },
+      {
+        id: "send1",
+        automation_id: "a1",
+        step_type: "send_message",
+        position: 3,
+        parent_step_id: "cond1",
+        branch: "yes",
+        step_config: { text: "Just checking in — still there?" },
+      },
+    ];
+
+    // message_content condition evaluates against context.message_text;
+    // "x" is a substring of "a real question about x", so the "yes"
+    // branch is the one taken.
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { message_text: "a real question about x" },
+    });
+
+    expect(result).toEqual({ sentReply: false });
+  });
+
+  it("send -> wait: DOES stand down — a send before the wait still counts", async () => {
+    h.state.owned = { id: "c1" };
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [
+      {
+        id: "send1",
+        automation_id: "a1",
+        step_type: "send_message",
+        position: 0,
+        parent_step_id: null,
+        step_config: { text: "On it — give me a moment." },
+      },
+      {
+        id: "wait1",
+        automation_id: "a1",
+        step_type: "wait",
+        position: 1,
+        parent_step_id: null,
+        step_config: { amount: 10, unit: "minutes" },
+      },
+    ];
+
+    const result = await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context: { conversation_id: "conv-1" },
     });
 
     expect(result).toEqual({ sentReply: true });

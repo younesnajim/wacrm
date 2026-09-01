@@ -854,13 +854,13 @@ async function processMessage(
   //
   // `sentReply` is tracked so the AI auto-reply gate below can stand down
   // only when a `new_message_received` / `keyword_match` automation
-  // actually put (or is still on track to put, via a parked `wait` step) a
-  // message in front of the customer for THIS inbound — not merely
-  // because such an automation exists and is active. An automation whose
-  // condition didn't match, or that only tags/updates the contact, must
-  // not silently suppress the AI (issue: AI stopped replying whenever any
-  // active new_message_received automation existed, regardless of what it
-  // actually did).
+  // actually put a message in front of the customer for THIS inbound IN
+  // THIS SAME synchronous run — not merely because such an automation
+  // exists and is active, and not because one is scheduled to send later.
+  // An automation whose condition didn't match, that only tags/updates
+  // the contact, or that reaches a send only after parking at a `wait`
+  // (landing minutes/hours later, not competing with the immediate
+  // reply), must not silently suppress the AI.
   let automationSentReply = false
   for (const triggerType of automationTriggers) {
     const result = await runAutomationsForTrigger({
