@@ -1116,7 +1116,7 @@
         "headersLabel": "헤더",
         "placeholderHeaders": "{\"Authorization\": \"Bearer ...\"}",
         "bodyTemplateLabel": "본문 템플릿",
-        "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
+        "placeholderBody": "{\"contact_id\": \"{{ contact.id }}\", \"conversation_id\": \"{{ conversation.id }}\"}",
         "matchType": "일치 유형",
         "matchContains": "포함",
         "matchWord": "단어 단위 일치",

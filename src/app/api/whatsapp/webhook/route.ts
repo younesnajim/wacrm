@@ -869,6 +869,7 @@ async function processMessage(
       contactId: contactRecord.id,
       context: {
         message_text: inboundText,
+        message_id: message.id,
         conversation_id: conversation.id,
         // Only set on interactive taps; drives the interactive_reply
         // trigger's exact-id match.

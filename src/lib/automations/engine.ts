@@ -40,15 +40,22 @@ const SEND_STEP_TYPES = new Set<AutomationStep['step_type']>([
 // ------------------------------------------------------------
 
 export interface AutomationContext {
-  /** Raw message text, for keyword_match + message_content conditions. */
+  /** Raw message text, for keyword_match + message_content conditions,
+   *  and the `{{ message.text }}` template variable. */
   message_text?: string
-  /** Conversation the event belongs to, if any. */
+  /** The inbound message's Meta id (wamid), for the `{{ message.id }}`
+   *  template variable. Set by the webhook route alongside message_text. */
+  message_id?: string
+  /** Conversation the event belongs to, if any. Also the
+   *  `{{ conversation.id }}` template variable. */
   conversation_id?: string
   /** Arbitrary variables accumulated during execution. */
   vars?: Record<string, unknown>
-  /** The tag id that was added, for tag_added trigger. */
+  /** The tag id that was added, for tag_added trigger. Also the
+   *  `{{ tag.id }}` template variable. */
   tag_id?: string
-  /** Agent the conversation was assigned to, for conversation_assigned. */
+  /** Agent the conversation was assigned to, for conversation_assigned.
+   *  Also the `{{ agent.id }}` template variable. */
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
@@ -424,7 +431,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_message': {
       const cfg = step.step_config as SendMessageStepConfig
       if (!args.contactId) throw new Error('send_message needs a contact')
-      const text = interpolate(cfg.text, args)
+      const text = await interpolate(cfg.text, args)
       if (!text.trim()) throw new Error('send_message has empty text')
       const conversationId = await resolveConversationId(args)
       const { whatsapp_message_id } = await engineSendText({
@@ -571,7 +578,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!args.contactId) throw new Error('update_contact_field needs a contact')
       // Resolve workflow variables ({{ vars.* }}, {{ message.text }}) so custom
       // values can be populated dynamically from the triggering context.
-      const value = interpolate(cfg.value, args)
+      const value = await interpolate(cfg.value, args)
 
       // Custom fields are encoded as `custom:<custom_field_id>`; anything else
       // is a built-in contact column.
@@ -638,7 +645,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         pipeline_id: cfg.pipeline_id,
         stage_id: cfg.stage_id,
         contact_id: args.contactId,
-        title: interpolate(cfg.title, args),
+        title: await interpolate(cfg.title, args),
         value: cfg.value ?? 0,
         currency: acct?.default_currency ?? 'USD',
         status: 'open',
@@ -670,7 +677,9 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           `[automations] send_webhook: WEBHOOK_ALLOWED_HOSTS permitted an otherwise-blocked destination for automation ${args.automation.id}: ${cfg.url}`,
         )
       }
-      const body = cfg.body_template ? interpolate(cfg.body_template, args) : JSON.stringify(args.context)
+      const body = cfg.body_template
+        ? await interpolate(cfg.body_template, args)
+        : JSON.stringify(args.context)
       const res = await fetch(cfg.url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(cfg.headers ?? {}) },
@@ -922,11 +931,56 @@ function waitMs(cfg: WaitStepConfig): number {
   return Math.max(1_000, cfg.amount * unitMs)
 }
 
-function interpolate(s: string, args: ExecuteArgs): string {
+/**
+ * Template variables available to send_message/send_webhook/
+ * update_contact_field/create_deal: `{{ message.text }}`,
+ * `{{ message.id }}`, `{{ contact.id }}`, `{{ contact.phone }}`,
+ * `{{ contact.name }}`, `{{ conversation.id }}`, `{{ tag.id }}`,
+ * `{{ agent.id }}`, and `{{ vars.<name> }}`. An unrecognized or
+ * unpopulated variable resolves to `''`, same as an unmatched one
+ * always has.
+ *
+ * `contact.id` is free (already in `args.contactId`); `contact.phone`
+ * and `contact.name` are not loaded onto the contact anywhere else in
+ * the run, so resolving either means one extra `contacts` read. This
+ * fires on every inbound message, so that read only happens when the
+ * template actually references one of those two — checked with the
+ * same tokenizer used for substitution, not a separate pattern, so
+ * detection can't drift from what's actually substituted.
+ */
+async function interpolate(s: string, args: ExecuteArgs): Promise<string> {
+  const tokens = [...s.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1])
+  const needsContactRow = tokens.some((key) => {
+    const [ns, prop] = key.split('.')
+    return ns === 'contact' && (prop === 'phone' || prop === 'name')
+  })
+
+  let contactRow: { phone: string | null; name: string | null } | null = null
+  if (needsContactRow && args.contactId) {
+    const db = supabaseAdmin()
+    // Account-scoped even though `args.contactId` already passed the
+    // entry-point ownership guard — defense in depth, same reasoning as
+    // the other account_id-scoped reads/writes in this file.
+    const { data } = await db
+      .from('contacts')
+      .select('phone, name')
+      .eq('id', args.contactId)
+      .eq('account_id', args.automation.account_id)
+      .maybeSingle()
+    contactRow = data
+  }
+
   return s.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
     const [ns, prop] = String(key).split('.')
     if (ns === 'message' && prop === 'text') return String(args.context.message_text ?? '')
+    if (ns === 'message' && prop === 'id') return String(args.context.message_id ?? '')
     if (ns === 'vars' && prop) return String(args.context.vars?.[prop] ?? '')
+    if (ns === 'contact' && prop === 'id') return String(args.contactId ?? '')
+    if (ns === 'contact' && prop === 'phone') return String(contactRow?.phone ?? '')
+    if (ns === 'contact' && prop === 'name') return String(contactRow?.name ?? '')
+    if (ns === 'conversation' && prop === 'id') return String(args.context.conversation_id ?? '')
+    if (ns === 'tag' && prop === 'id') return String(args.context.tag_id ?? '')
+    if (ns === 'agent' && prop === 'id') return String(args.context.agent_id ?? '')
     return ''
   })
 }

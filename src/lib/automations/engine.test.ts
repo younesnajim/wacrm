@@ -631,6 +631,100 @@ describe("send_webhook — SSRF guard (GHSA-8jqh-598v-rfxc)", () => {
   });
 });
 
+describe("interpolate — template variables (contact/conversation/message/tag/agent)", () => {
+  async function runWebhookStep(bodyTemplate: string, context: Record<string, unknown> = {}) {
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    h.state.automations = [automationWithUpdateStep()];
+    h.state.steps = [webhookStepWithBody(bodyTemplate)];
+
+    await runAutomationsForTrigger({
+      accountId: ACCOUNT,
+      triggerType: "new_message_received",
+      contactId: "c1",
+      context,
+    });
+
+    const body = fetchSpy.mock.calls[0]?.[1]?.body as string | undefined;
+    vi.unstubAllGlobals();
+    return { fetchSpy, body };
+  }
+
+  it("resolves {{ contact.id }} from args.contactId, with no contact fetch", async () => {
+    h.state.owned = { id: "c1" }; // no phone/name — proves they're unused for this case
+
+    const { fetchSpy, body } = await runWebhookStep('{"contact_id":"{{ contact.id }}"}');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(body!)).toEqual({ contact_id: "c1" });
+
+    // Exactly one `contacts` read total — the entry-point tenant-
+    // ownership guard in runAutomationsForTrigger. contact.id alone
+    // must not add a second one.
+    const contactsFetches = h.state.fromCalls.filter((t) => t === "contacts").length;
+    expect(contactsFetches).toBe(1);
+  });
+
+  it("resolves {{ contact.phone }} and {{ contact.name }}, fetching the contact row exactly once", async () => {
+    h.state.owned = { id: "c1", phone: "+15551234567", name: "Ada Lovelace" };
+
+    const { body } = await runWebhookStep(
+      '{"phone":"{{ contact.phone }}","name":"{{ contact.name }}"}',
+    );
+
+    expect(JSON.parse(body!)).toEqual({ phone: "+15551234567", name: "Ada Lovelace" });
+
+    // Ownership guard + the one interpolate-triggered contact fetch = 2,
+    // not one per variable — a single template with both variables
+    // still only reads the row once.
+    const contactsFetches = h.state.fromCalls.filter((t) => t === "contacts").length;
+    expect(contactsFetches).toBe(2);
+  });
+
+  it("resolves {{ conversation.id }}", async () => {
+    h.state.owned = { id: "c1" };
+
+    const { body } = await runWebhookStep(
+      '{"conversation_id":"{{ conversation.id }}"}',
+      { conversation_id: "conv-42" },
+    );
+
+    expect(JSON.parse(body!)).toEqual({ conversation_id: "conv-42" });
+  });
+
+  it("resolves {{ message.id }}", async () => {
+    h.state.owned = { id: "c1" };
+
+    const { body } = await runWebhookStep(
+      '{"message_id":"{{ message.id }}"}',
+      { message_id: "wamid.HBgLABC123" },
+    );
+
+    expect(JSON.parse(body!)).toEqual({ message_id: "wamid.HBgLABC123" });
+  });
+
+  it("resolves {{ tag.id }}", async () => {
+    h.state.owned = { id: "c1" };
+
+    const { body } = await runWebhookStep('{"tag_id":"{{ tag.id }}"}', {
+      tag_id: "tag-vip",
+    });
+
+    expect(JSON.parse(body!)).toEqual({ tag_id: "tag-vip" });
+  });
+
+  it("resolves {{ agent.id }}", async () => {
+    h.state.owned = { id: "c1" };
+
+    const { body } = await runWebhookStep('{"agent_id":"{{ agent.id }}"}', {
+      agent_id: "agent-9",
+    });
+
+    expect(JSON.parse(body!)).toEqual({ agent_id: "agent-9" });
+  });
+});
+
 function webhookStep(url: string) {
   return {
     id: "s1",
@@ -639,6 +733,20 @@ function webhookStep(url: string) {
     position: 0,
     parent_step_id: null,
     step_config: { url, headers: { "Metadata-Flavor": "Google" }, body_template: "{}" },
+  };
+}
+
+function webhookStepWithBody(body_template: string) {
+  return {
+    id: "s1",
+    automation_id: "a1",
+    step_type: "send_webhook",
+    position: 0,
+    parent_step_id: null,
+    // Public IP literal — passes the SSRF guard synchronously (no DNS
+    // lookup, no WEBHOOK_ALLOWED_HOSTS needed), so these tests are
+    // purely about interpolate(), not deliverability.
+    step_config: { url: "http://8.8.8.8/webhook", body_template },
   };
 }
 

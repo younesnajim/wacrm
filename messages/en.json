@@ -1116,7 +1116,7 @@
         "headersLabel": "Headers",
         "placeholderHeaders": "{\"Authorization\": \"Bearer ...\"}",
         "bodyTemplateLabel": "Body template",
-        "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
+        "placeholderBody": "{\"contact_id\": \"{{ contact.id }}\", \"conversation_id\": \"{{ conversation.id }}\"}",
         "matchType": "Match type",
         "matchContains": "Contains",
         "matchWord": "Whole word",

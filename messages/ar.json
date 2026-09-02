@@ -1116,7 +1116,7 @@
         "headersLabel": "العناوين",
         "placeholderHeaders": "{\"Authorization\": \"Bearer ...\"}",
         "bodyTemplateLabel": "قالب المحتوى",
-        "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
+        "placeholderBody": "{\"contact_id\": \"{{ contact.id }}\", \"conversation_id\": \"{{ conversation.id }}\"}",
         "matchType": "نوع المطابقة",
         "matchContains": "يحتوي",
         "matchWord": "كلمة كاملة",
