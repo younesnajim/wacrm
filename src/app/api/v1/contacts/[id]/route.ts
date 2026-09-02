@@ -5,7 +5,12 @@
 // Both are account-scoped: a contact belonging to another account
 // returns 404 (never 403 — don't reveal it exists elsewhere).
 // PATCH updates only the fields present in the body; pass `tags` (an
-// array of tag names) to replace the contact's tags.
+// array of tag names) to replace the contact's tags, and/or
+// `custom_fields` (a name -> value object) to upsert specific custom
+// field values — fields not mentioned are left untouched. An unknown
+// custom field name 400s the whole request before anything is written.
+// GET's response includes both `tags` and `custom_fields` (the latter
+// keyed by field name, e.g. `{ "lead_status": "hot" }`).
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context';
@@ -13,6 +18,7 @@ import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
 import {
   getContactById,
   setContactTags,
+  setContactCustomFields,
   resolveAuditUserId,
   ContactError,
 } from '@/lib/api/v1/contacts';
@@ -51,6 +57,23 @@ export async function PATCH(
     // Verify the contact is in this account before mutating anything.
     const existing = await getContactById(ctx.supabase, ctx.accountId, id);
     if (!existing) return fail('not_found', 'Contact not found', 404);
+
+    // Resolve + validate custom_fields FIRST, before any other write in
+    // this request: an unknown field name (the most likely caller
+    // mistake) should reject the whole PATCH, not land after the
+    // scalar/tag updates already went through.
+    if (
+      body.custom_fields &&
+      typeof body.custom_fields === 'object' &&
+      !Array.isArray(body.custom_fields)
+    ) {
+      await setContactCustomFields(
+        ctx.supabase,
+        ctx.accountId,
+        id,
+        body.custom_fields as Record<string, unknown>
+      );
+    }
 
     // Build a partial update from the provided scalar fields. A field
     // is updated only when its key is PRESENT (so omitted fields are

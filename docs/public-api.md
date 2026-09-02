@@ -5,8 +5,9 @@ scripts and automations — send messages, manage contacts, launch
 broadcasts — without going through the dashboard UI.
 
 > **Status:** stable. Authentication, scopes, rate limiting, the
-> messages / contacts / conversations / broadcasts endpoints, and
-> outbound event [webhooks](#webhooks) all ship now.
+> messages / contacts (incl. custom fields) / conversations /
+> broadcasts / deal-creation endpoints, and outbound event
+> [webhooks](#webhooks) all ship now.
 
 ## Authentication
 
@@ -50,6 +51,8 @@ it. Grant the minimum.
 | `conversations:read` | List and read conversations              |
 | `broadcasts:send`    | Launch broadcast campaigns               |
 | `webhooks:manage`    | Register and manage outbound webhooks    |
+| `deals:read`         | List and read deals                      |
+| `deals:write`        | Create deals                             |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -177,12 +180,17 @@ or phone) and `?tag=<tagId>`.
       "id": "…", "phone": "+14155550123", "name": "Jane Doe",
       "email": null, "company": "Acme", "avatar_url": null,
       "tags": [{ "id": "…", "name": "vip", "color": "#3b82f6" }],
+      "custom_fields": { "lead_status": "hot" },
       "created_at": "…", "updated_at": "…"
     }
   ],
   "meta": { "next_cursor": "…" }
 }
 ```
+
+`custom_fields` is keyed by the field's name (as configured in
+Settings → Custom fields) and only includes fields that actually have
+a value set on this contact.
 
 ### `POST /api/v1/contacts`
 
@@ -196,9 +204,39 @@ list rows above).
 ### `GET` / `PATCH /api/v1/contacts/{id}`
 
 Read or update one contact. Scopes: `contacts:read` / `contacts:write`.
-`PATCH` updates only the fields you send (`name`, `email`, `company`);
-pass `tags` (an array of tag names) to replace the contact's tags. A
-contact in another account returns `404`.
+`PATCH` updates only the fields you send:
+
+- `name`, `email`, `company` — scalar contact fields.
+- `tags` — an array of tag names; **replaces** the contact's entire tag
+  set (diffed server-side, so this is still safe to call repeatedly).
+- `custom_fields` — a `{ "field_name": "value" }` object; **upserts**
+  only the keys you send, leaving every other custom field on the
+  contact untouched. `value` may be a string or `null`. An unknown
+  field name (one that doesn't exist in Settings → Custom fields for
+  this account) rejects the whole request with `400 bad_request` —
+  nothing in the request is applied, including `name`/`email`/`tags`
+  sent alongside it.
+
+A contact in another account returns `404`.
+
+### `GET /api/v1/contacts/{id}/deals`
+
+List a contact's deals, newest first. Scope: `deals:read`. Paginated.
+Useful for checking whether a deal already exists before creating one.
+`404` if the contact belongs to another account.
+
+```json
+{
+  "data": [
+    {
+      "id": "…", "contact_id": "…", "pipeline_id": "…", "stage_id": "…",
+      "title": "New lead — Acme", "value": 5000, "currency": "USD",
+      "status": "open", "created_at": "…", "updated_at": "…"
+    }
+  ],
+  "meta": { "next_cursor": "…" }
+}
+```
 
 ### `GET /api/v1/conversations`
 
@@ -262,6 +300,42 @@ Invalid phone numbers are dropped and counted as `rejected`. Response
 Broadcast status + counts. Scope: `broadcasts:send`. `status` moves
 `sending` → `sent`; `delivered_count` / `read_count` keep climbing as
 Meta delivery webhooks arrive. `404` for another account's broadcast.
+
+### `POST /api/v1/deals`
+
+Create a deal. Scope: `deals:write`. `contact_id`, `pipeline_id`,
+`stage_id`, and `title` are required; `value` is optional (defaults to
+`0`). `pipeline_id` and `stage_id` must belong to your account, and
+`stage_id` must actually be a stage of `pipeline_id` — any mismatch is
+a `400 bad_request` naming which field was wrong, not a `404` (you
+supplied these ids, so there's nothing to protect by hiding whether
+they resolve). `status` is always created as `open`; `currency`
+follows the account's configured default.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/deals \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "contact_id": "…", "pipeline_id": "…", "stage_id": "…",
+        "title": "New lead — Acme", "value": 5000
+      }'
+```
+
+Response (201):
+
+```json
+{
+  "data": {
+    "id": "…", "contact_id": "…", "pipeline_id": "…", "stage_id": "…",
+    "title": "New lead — Acme", "value": 5000, "currency": "USD",
+    "status": "open", "created_at": "…", "updated_at": "…"
+  }
+}
+```
+
+See also [`GET /api/v1/contacts/{id}/deals`](#get-apiv1contactsiddeals)
+to check for an existing deal before creating a duplicate.
 
 ## Pagination
 
@@ -376,8 +450,12 @@ internal targets are refused at delivery time.
 
 ## Roadmap
 
-The public API now covers messaging, contacts, conversations,
-broadcasts, and outbound webhooks — the full scope of
-[#245](https://github.com/ArnasDon/wacrm/issues/245). Future ideas
-(deals/pipelines, templates, flows, a delivery queue for webhooks) are
-not yet scheduled.
+The public API now covers messaging, contacts (incl. custom fields),
+conversations, broadcasts, deal creation, and outbound webhooks — the
+full scope of [#245](https://github.com/ArnasDon/wacrm/issues/245).
+Deal support today is intentionally narrow: create + list-by-contact,
+enough to check-then-create from an external system without a
+duplicate. There's no deal update/delete or pipeline management via
+the API yet — use the dashboard for that. Future ideas (fuller
+deal/pipeline CRUD, templates, flows, a delivery queue for webhooks)
+are not yet scheduled.

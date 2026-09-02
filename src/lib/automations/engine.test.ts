@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // so the vi.mock factory below can close over it.
 const h = vi.hoisted(() => ({
   state: {
-    owned: null as { id: string } | null,
+    owned: null as ({ id: string } & Record<string, unknown>) | null,
     ownedCustomField: null as { id: string } | null,
     automations: [] as Record<string, unknown>[],
     steps: [] as Record<string, unknown>[],
@@ -633,7 +633,9 @@ describe("send_webhook — SSRF guard (GHSA-8jqh-598v-rfxc)", () => {
 
 describe("interpolate — template variables (contact/conversation/message/tag/agent)", () => {
   async function runWebhookStep(bodyTemplate: string, context: Record<string, unknown> = {}) {
-    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200 }));
+    const fetchSpy = vi.fn<
+      (url: string, init?: { body?: string }) => Promise<{ ok: boolean; status: number }>
+    >(async () => ({ ok: true, status: 200 }));
     vi.stubGlobal("fetch", fetchSpy);
 
     h.state.automations = [automationWithUpdateStep()];

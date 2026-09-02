@@ -14,8 +14,13 @@ import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 
-/** Row select that embeds the contact's tags for serialization. */
-export const CONTACT_SELECT = '*, contact_tags(tags(*))';
+/** Row select that embeds the contact's tags + custom field values for
+ *  serialization. `contact_custom_values.custom_field_id -> custom_fields.id`
+ *  is many-to-one, so `custom_fields` comes back as a single object per
+ *  join row (or null for a dangling reference), same shape as the
+ *  `tags` embed below. */
+export const CONTACT_SELECT =
+  '*, contact_tags(tags(*)), contact_custom_values(value, custom_fields(field_name))';
 
 export interface ApiContact {
   id: string;
@@ -25,6 +30,9 @@ export interface ApiContact {
   company: string | null;
   avatar_url: string | null;
   tags: { id: string; name: string; color: string }[];
+  /** Keyed by the custom field's name, e.g. `{ "lead_status": "hot" }`.
+   *  Only fields with a value actually set on this contact appear. */
+  custom_fields: Record<string, string | null>;
   created_at: string;
   updated_at: string;
 }
@@ -40,10 +48,24 @@ export class ContactError extends Error {
 }
 
 type RawTagJoin = { tags: { id: string; name: string; color: string } | null };
+type RawCustomValueJoin = {
+  value: string | null;
+  custom_fields: { field_name: string } | null;
+};
 
 /** Flatten a `CONTACT_SELECT` row into the public contact shape. */
 export function serializeContact(row: Record<string, unknown>): ApiContact {
-  const joins = (row.contact_tags as RawTagJoin[] | undefined) ?? [];
+  const tagJoins = (row.contact_tags as RawTagJoin[] | undefined) ?? [];
+  const customJoins =
+    (row.contact_custom_values as RawCustomValueJoin[] | undefined) ?? [];
+
+  const custom_fields: Record<string, string | null> = {};
+  for (const j of customJoins) {
+    // A dangling join (the field definition was deleted) has no
+    // `custom_fields` row — skip it rather than surface a nameless key.
+    if (j.custom_fields) custom_fields[j.custom_fields.field_name] = j.value;
+  }
+
   return {
     id: row.id as string,
     phone: row.phone as string,
@@ -51,10 +73,11 @@ export function serializeContact(row: Record<string, unknown>): ApiContact {
     email: (row.email as string | null) ?? null,
     company: (row.company as string | null) ?? null,
     avatar_url: (row.avatar_url as string | null) ?? null,
-    tags: joins
+    tags: tagJoins
       .map((j) => j.tags)
       .filter((t): t is NonNullable<RawTagJoin['tags']> => t != null)
       .map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    custom_fields,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -212,6 +235,80 @@ export async function setContactTags(
         console.error('[api/v1/contacts] tag add failed:', error);
         throw new ContactError('Failed to update contact tags', 500);
       }
+    }
+  }
+}
+
+/**
+ * Upsert a contact's custom field values by name — only the keys
+ * present in `fields` are touched; every other custom field on the
+ * contact is left exactly as it was. `null` clears a field's value
+ * without removing the row.
+ *
+ * Field names are matched exactly (case-sensitive) against
+ * `custom_fields.field_name` for this account; there's no uniqueness
+ * constraint on that column, but the dashboard only ever creates one
+ * field per name, so an unambiguous match is the expected case. An
+ * unknown name throws — a 400, not a silent no-op or an auto-created
+ * field — resolved for ALL keys in one query before anything is
+ * written, so a single typo'd name in a multi-field request rejects
+ * the whole call rather than partially applying it.
+ */
+export async function setContactCustomFields(
+  db: SupabaseClient,
+  accountId: string,
+  contactId: string,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const names = Object.keys(fields);
+  if (names.length === 0) return;
+
+  for (const name of names) {
+    const value = fields[name];
+    if (value !== null && typeof value !== 'string') {
+      throw new ContactError(
+        `Custom field '${name}' must be a string or null`,
+        400
+      );
+    }
+  }
+
+  const { data: defs, error } = await db
+    .from('custom_fields')
+    .select('id, field_name')
+    .eq('account_id', accountId)
+    .in('field_name', names);
+  if (error) {
+    throw new ContactError('Failed to resolve custom fields', 500);
+  }
+
+  const idByName = new Map<string, string>();
+  for (const d of defs ?? []) {
+    idByName.set(d.field_name as string, d.id as string);
+  }
+
+  const unknown = names.filter((n) => !idByName.has(n));
+  if (unknown.length > 0) {
+    throw new ContactError(
+      `Unknown custom field name(s): ${unknown.join(', ')}`,
+      400
+    );
+  }
+
+  for (const name of names) {
+    const fieldId = idByName.get(name) as string;
+    const { error: upsertErr } = await db
+      .from('contact_custom_values')
+      .upsert(
+        {
+          contact_id: contactId,
+          custom_field_id: fieldId,
+          value: fields[name] as string | null,
+        },
+        { onConflict: 'contact_id,custom_field_id' }
+      );
+    if (upsertErr) {
+      throw new ContactError('Failed to update custom fields', 500);
     }
   }
 }
