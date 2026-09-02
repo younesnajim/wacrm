@@ -193,7 +193,23 @@ export async function setContactTags(
     tagNames,
     canCreateTags: true,
   });
-  const desired = new Set(tagIdByKey.values());
+
+  // `tagIdByKey` is a name -> id lookup seeded from EVERY tag in the
+  // account (resolveImportTagIds.ts) — correct for its original CSV-
+  // import caller, which does its own per-name lookups across many
+  // rows, but wrong to consume wholesale here. Taking `.values()` of
+  // the whole map previously made `desired` silently become "every tag
+  // in the account" instead of just the ones in `tagNames`, which made
+  // the diff below always see `existing ⊆ desired` and never remove
+  // anything (issue: tags only ever accumulated). Look up exactly the
+  // requested names instead.
+  const desired = new Set(
+    tagNames
+      .map((n) => n.trim().toLowerCase())
+      .filter(Boolean)
+      .map((key) => tagIdByKey.get(key))
+      .filter((id): id is string => id != null)
+  );
 
   // Diff against the current joins rather than delete-all-then-insert:
   // a diff only touches tags that actually change, so a mid-operation

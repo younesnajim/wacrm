@@ -132,6 +132,8 @@ function makeFakeDb() {
   return {
     supabase: { from: (t: string) => builder(t) } as unknown as SupabaseClient,
     contacts,
+    contactTags,
+    tags,
     contactCustomValues,
     customFields,
   };
@@ -320,5 +322,34 @@ describe('PATCH /api/v1/contacts/{id} — custom_fields', () => {
 
     expect(res.status).toBe(403);
     expect(body.error.code).toBe('forbidden');
+  });
+});
+
+describe('PATCH /api/v1/contacts/{id} — omitting `tags`', () => {
+  it('leaves tags untouched when the tags key is absent entirely (must not clear)', async () => {
+    const db = makeFakeDb();
+    db.contacts.push(baseContact());
+    db.tags.push(
+      { id: 't-hot', account_id: 'acct-A', name: 'hot', color: '#f00' },
+      { id: 't-cold', account_id: 'acct-A', name: 'cold', color: '#00f' }
+    );
+    db.contactTags.push(
+      { contact_id: 'c1', tag_id: 't-hot' },
+      { contact_id: 'c1', tag_id: 't-cold' }
+    );
+    requireApiKey.mockResolvedValue(ctxFor(db));
+
+    // No `tags` key at all — only an unrelated scalar field.
+    const res = await PATCH(req('PATCH', { company: 'Acme' }), paramsFor('c1'));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.tags.map((t: { name: string }) => t.name).sort()).toEqual([
+      'cold',
+      'hot',
+    ]);
+    // The join rows themselves are untouched, not just coincidentally
+    // re-derived the same way.
+    expect(db.contactTags).toHaveLength(2);
   });
 });
