@@ -695,6 +695,9 @@ async function processMessage(
   // ONLY on a genuine first insert — an empty result means this delivery
   // was a replay. This is the single idempotency boundary that must sit
   // BEFORE the unread bump and all downstream fan-out below (issue #367).
+  const inboundMessageCreatedAt = new Date(
+    parseInt(message.timestamp) * 1000
+  ).toISOString()
   const { data: insertedRows, error: msgError } = await supabaseAdmin()
     .from('messages')
     .upsert(
@@ -711,7 +714,7 @@ async function processMessage(
         media_type: mediaType,
         message_id: message.id,
         status: 'delivered',
-        created_at: new Date(parseInt(message.timestamp) * 1000).toISOString(),
+        created_at: inboundMessageCreatedAt,
         reply_to_message_id: replyToInternalId,
         // Only populated for content_type='interactive'. Migration 010 added
         // the column; null for every other content_type so existing inserts
@@ -885,6 +888,27 @@ async function processMessage(
     ) {
       automationSentReply = true
     }
+  }
+
+  // A customer texting again after 24h+ of silence is a new WhatsApp
+  // session — give the bot a fresh reply budget and clear any prior
+  // pause (model handoff or an agent's "Take over" that was never
+  // explicitly resumed) rather than leaving both stuck from the last
+  // session forever. Keyed on the previous CUSTOMER message, not
+  // `conversations.last_message_at` (outbound sends bump that too, which
+  // would mask a real customer-side gap) — see migration 048. Runs
+  // unconditionally on every inbound customer message, before the AI
+  // dispatch below; best-effort like the other conversation-state writes
+  // in this handler, so a failure here must not block the webhook ack.
+  const { error: sessionResetErr } = await supabaseAdmin().rpc(
+    'reset_ai_session_if_stale',
+    {
+      conversation_id: conversation.id,
+      current_message_at: inboundMessageCreatedAt,
+    }
+  )
+  if (sessionResetErr) {
+    console.error('[ai auto-reply] session reset failed:', sessionResetErr)
   }
 
   // AI auto-reply. Runs only for plain-text inbound the deterministic

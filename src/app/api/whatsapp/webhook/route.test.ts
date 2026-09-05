@@ -294,8 +294,13 @@ describe('inbound webhook: idempotent insert (#367)', () => {
       onConflict: 'conversation_id,message_id',
       ignoreDuplicates: true,
     })
-    // Downstream side effects ran exactly once.
-    expect(h.state.rpcCalls).toHaveLength(1)
+    // Downstream side effects ran exactly once: the unread bump and the
+    // AI session-boundary reset (both DB-side RPCs).
+    expect(h.state.rpcCalls).toHaveLength(2)
+    expect(h.state.rpcCalls.map((c) => c.name)).toEqual([
+      'bump_conversation_on_inbound',
+      'reset_ai_session_if_stale',
+    ])
     expect(h.dispatchInboundToFlows).toHaveBeenCalledTimes(1)
     expect(h.dispatchWebhookEvent).toHaveBeenCalledTimes(1)
   })
@@ -320,11 +325,48 @@ describe('inbound webhook: atomic unread bump (#369)', () => {
   it('increments unread through the DB-side RPC, not a read-modify-write', async () => {
     await runWebhook()
 
-    expect(h.state.rpcCalls).toHaveLength(1)
-    expect(h.state.rpcCalls[0]).toMatchObject({
+    const bumpCall = h.state.rpcCalls.find(
+      (c) => c.name === 'bump_conversation_on_inbound',
+    )
+    expect(bumpCall).toMatchObject({
       name: 'bump_conversation_on_inbound',
       args: { p_conversation_id: 'conv-1' },
     })
+  })
+})
+
+describe('inbound webhook: AI session-boundary reset', () => {
+  it('claims the reset atomically via RPC, keyed on this message\'s own timestamp', async () => {
+    await runWebhook()
+
+    const resetCall = h.state.rpcCalls.find(
+      (c) => c.name === 'reset_ai_session_if_stale',
+    )
+    expect(resetCall).toMatchObject({
+      name: 'reset_ai_session_if_stale',
+      args: {
+        conversation_id: 'conv-1',
+        // TEXT_MESSAGE.timestamp is 1700000000 (epoch seconds).
+        current_message_at: new Date(1700000000 * 1000).toISOString(),
+      },
+    })
+  })
+
+  it('runs even when nothing downstream will use it (button tap, no free text)', async () => {
+    // The AI dispatch itself is skipped for a button tap (see #478 above),
+    // but the session boundary is a property of the customer's timeline,
+    // not of any one trigger's eligibility — it must still be evaluated.
+    await runWebhook({
+      id: 'wamid.BTN1',
+      from: '15551230000',
+      timestamp: '1700000000',
+      type: 'button',
+      button: { text: 'Yes, interested', payload: 'YES_INTERESTED' },
+    })
+
+    expect(
+      h.state.rpcCalls.some((c) => c.name === 'reset_ai_session_if_stale'),
+    ).toBe(true)
   })
 })
 
