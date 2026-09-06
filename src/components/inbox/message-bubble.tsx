@@ -249,12 +249,26 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative min-w-0 rounded-2xl px-3 py-2",
           isAgent
             ? "rounded-br-md bg-primary text-primary-foreground"
             : "rounded-bl-md bg-muted text-foreground",
         )}
       >
+        {/* min-w-0: this div is a flex item of the `flex-col` container
+         *  above (aligned via items-end/items-start, i.e. NOT stretched),
+         *  so its default `min-width: auto` applies. iOS Safari computes
+         *  that automatic minimum from the longest unbroken run of text
+         *  (e.g. a URL) and — unlike Chrome/Firefox — ignores the
+         *  `overflow-wrap: break-word` on the <p> below when doing so, so
+         *  the bubble refuses to shrink to the `max-w-[75%]` cap
+         *  (message-actions.tsx) and overflows the viewport instead of
+         *  wrapping. Same root cause as the row-level fix for issue #165
+         *  (min-w-0 on the row's flex child in message-actions.tsx) — this
+         *  is the nested flex item that fix didn't reach: a long-URL AI
+         *  reply bubble overflowing the viewport edge on iOS Safari. Do
+         *  not remove as redundant.
+         */}
         {reply && (
           <ReplyQuote
             authorLabel={reply.authorLabel}
