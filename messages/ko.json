@@ -324,6 +324,7 @@
       "photo": "사진",
       "video": "동영상",
       "audio": "오디오",
+      "transcript": "음성 텍스트 변환",
       "unavailable": "{label}을(를) 사용할 수 없습니다",
       "document": "문서",
       "locationShared": "위치 공유됨",

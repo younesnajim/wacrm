@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { mirrorInboundMedia } from '@/lib/whatsapp/mirror-inbound-media'
+import { transcribeInboundAudio } from '@/lib/whatsapp/transcribe-audio'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
@@ -1065,9 +1066,21 @@ async function parseMessageContent(
 
     case 'audio':
       if (message.audio?.id) {
+        // Mirroring (playable URL) and transcription are independent,
+        // best-effort concerns — run them in parallel rather than
+        // sequencing one after the other, so a slow/failing Munsit call
+        // can't delay the (already-working) media mirror or vice versa.
+        // Transcription makes its own getMediaUrl/downloadMedia call
+        // rather than reuse the mirror's buffer — see
+        // src/lib/whatsapp/transcribe-audio.ts for why.
+        const [mediaUrl, contentText] = await Promise.all([
+          verifyAndBuildUrl(message.audio.id),
+          transcribeInboundAudio({ mediaId: message.audio.id, accessToken }),
+        ])
         return {
           ...empty,
-          mediaUrl: await verifyAndBuildUrl(message.audio.id),
+          contentText,
+          mediaUrl,
           mediaType: message.audio.mime_type,
         }
       }

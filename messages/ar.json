@@ -324,6 +324,7 @@
       "photo": "صورة",
       "video": "فيديو",
       "audio": "صوت",
+      "transcript": "النص المحوّل",
       "unavailable": "{label} غير متاح",
       "document": "مستند",
       "locationShared": "تمت مشاركة الموقع",

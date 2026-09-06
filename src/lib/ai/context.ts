@@ -10,8 +10,15 @@ interface DbMessage {
 /**
  * Fetch the last N text messages of a conversation and map them to the
  * provider-neutral chat shape. Customer messages become `user`; agent
- * and bot messages become `assistant`. Non-text messages (media,
- * templates, interactive) are excluded — they carry no text to model.
+ * and bot messages become `assistant`. Most non-text messages (images,
+ * documents, templates, interactive taps) are excluded — a bare caption
+ * divorced from a picture the model never received could mislead it.
+ * `audio` is the one exception: its `content_text` (when present) is a
+ * Munsit transcript of the voice note, not a caption — it IS the
+ * message's entire content, so it's included exactly like a text
+ * message. A voice note that failed to transcribe (or arrived before
+ * this existed) has `content_text: null` and is dropped by the
+ * non-empty filter below, same as it always was.
  *
  * Ordered oldest-first (chronological) so the transcript reads
  * naturally and the most recent customer message lands last.
@@ -25,7 +32,7 @@ export async function buildConversationContext(
     .from('messages')
     .select('sender_type, content_text')
     .eq('conversation_id', conversationId)
-    .eq('content_type', 'text')
+    .in('content_type', ['text', 'audio'])
     .order('created_at', { ascending: false })
     .limit(limit)
 

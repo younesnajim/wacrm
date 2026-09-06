@@ -121,6 +121,16 @@ function MessageContent({
           ) : (
             <MediaUnavailable label={t("audio")} t={t} />
           )}
+          {/* Meta's audio payload has no caption field — unlike video/
+              image/document, any content_text here is always a Munsit
+              transcript, never customer-authored text. Labeled distinctly
+              so an agent doesn't mistake ASR output for a typed caption. */}
+          {message.content_text && (
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+              <span className="text-muted-foreground">{t("transcript")}: </span>
+              {message.content_text}
+            </p>
+          )}
         </div>
       );
 

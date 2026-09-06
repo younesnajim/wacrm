@@ -3,12 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildConversationContext } from './context'
 
 /** Minimal fake matching the query chain in buildConversationContext:
- *  from().select().eq().eq().order().limit() → { data, error }. */
+ *  from().select().eq().in().order().limit() → { data, error }. Doesn't
+ *  itself filter by content_type — these tests assume the DB already
+ *  applied the `.in(...)` filter and only exercise the mapping logic. */
 function fakeDb(rows: unknown[]): SupabaseClient {
   const chain = {
     from: () => chain,
     select: () => chain,
     eq: () => chain,
+    in: () => chain,
     order: () => chain,
     limit: () => Promise.resolve({ data: rows, error: null }),
   }
@@ -37,6 +40,18 @@ describe('buildConversationContext', () => {
       'conv-1',
     )
     expect(out).toEqual([{ role: 'assistant', content: 'auto reply' }])
+  })
+
+  it('includes a transcribed voice note like any other customer message', async () => {
+    // The DB filter is `.in('content_type', ['text', 'audio'])` — a row
+    // is selected by content_type, but never re-branched on it here:
+    // an audio row with a Munsit transcript in content_text maps the
+    // same way a text row does.
+    const out = await buildConversationContext(
+      fakeDb([{ sender_type: 'customer', content_text: 'أحتاج إلى فاتورة' }]),
+      'conv-1',
+    )
+    expect(out).toEqual([{ role: 'user', content: 'أحتاج إلى فاتورة' }])
   })
 
   it('drops empty / whitespace-only messages', async () => {

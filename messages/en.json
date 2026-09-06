@@ -324,6 +324,7 @@
       "photo": "Photo",
       "video": "Video",
       "audio": "Audio",
+      "transcript": "Transcript",
       "unavailable": "{label} unavailable",
       "document": "Document",
       "locationShared": "Location shared",
