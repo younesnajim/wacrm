@@ -194,10 +194,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
       <aside
         className={cn(
-          // Mobile: fixed drawer that slides in from the left.
+          // Mobile: fixed drawer, anchored to the inline-start edge (left
+          // in LTR, right in RTL via `start-0`).
           "fixed inset-y-0 start-0 z-40 flex h-full w-64 flex-col border-e border-border bg-card",
           "transition-transform duration-200 ease-out will-change-transform",
-          open ? "translate-x-0" : "-translate-x-full",
+          // Closed state must clear the viewport in whichever physical
+          // direction `start-0` actually anchored the drawer to — `start-0`
+          // is logical (dir-aware) but `translate-x` is always physical, so
+          // a single hardcoded sign only ever fully hides one direction.
+          // `-translate-x-full` clears it in LTR (anchored left, slides
+          // further left, off-screen); in RTL (anchored right) that same
+          // shift only moves it partway across, leaving roughly a third of
+          // the drawer permanently visible/stuck-open regardless of the
+          // hamburger. `rtl:translate-x-full` overrides it with the mirror
+          // image (slides right, off-screen) whenever `dir="rtl"` — see the
+          // mobile Arabic sidebar-never-collapses bug this fixes.
+          open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
