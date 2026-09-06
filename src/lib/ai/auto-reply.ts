@@ -9,6 +9,7 @@ import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { getAutoReplyStatus } from './eligibility'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -71,11 +72,20 @@ export async function dispatchInboundToAiReply(
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
-    if (conv.assigned_agent_id) return // a human owns this thread
-    if (conv.ai_autoreply_disabled) return // handed off / turned off here
-    // Cheap early-out; the authoritative cap check is the atomic claim
-    // below (this read can race a concurrent inbound).
-    if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+    // Shared with `AiThreadBanner` (src/lib/ai/eligibility.ts) so the
+    // inbox banner can never again claim the bot is active when this
+    // gate has already gone quiet. This read of `ai_reply_count` is a
+    // cheap early-out, not authoritative — the atomic claim below is
+    // what actually enforces the cap (this read can race a concurrent
+    // inbound).
+    const status = getAutoReplyStatus({
+      autoReplyEnabledForAccount: true, // already checked above
+      assignedAgentId: conv.assigned_agent_id,
+      autoreplyDisabledOnConversation: conv.ai_autoreply_disabled,
+      replyCount: conv.ai_reply_count ?? 0,
+      maxRepliesPerConversation: config.autoReplyMaxPerConversation,
+    })
+    if (status !== 'active') return
 
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return

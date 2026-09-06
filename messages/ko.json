@@ -399,6 +399,7 @@
     },
     "aiBanner": {
       "pausedTitle": "이 대화에서 AI 어시스턴트가 일시 중지됨",
+      "cappedTitle": "AI 어시스턴트 일시 중지됨 — 응답 한도에 도달했습니다",
       "activeText": "AI 어시스턴트가 자동으로 응답 중입니다",
       "takeOver": "직접 처리",
       "resume": "AI 재개",

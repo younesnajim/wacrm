@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
+import { getAutoReplyStatus } from "@/lib/ai/eligibility";
 
 // ------------------------------------------------------------
 // Account AI status is the same for every conversation, so cache it per
@@ -20,6 +21,9 @@ import { useAuth } from "@/hooks/use-auth";
 // ------------------------------------------------------------
 interface AiAccountStatus {
   autoReplyOn: boolean;
+  /** `ai_configs.auto_reply_max_per_conversation` — irrelevant (and left
+   *  at a harmless default) whenever `autoReplyOn` is false. */
+  maxPerConversation: number;
 }
 const statusCache = new Map<string, AiAccountStatus>();
 
@@ -28,17 +32,18 @@ async function fetchAiAccountStatus(accountId: string): Promise<AiAccountStatus>
   if (cached) return cached;
   try {
     const res = await fetch("/api/ai/config", { cache: "no-store" });
-    if (!res.ok) return { autoReplyOn: false }; // don't cache a transient failure
+    if (!res.ok) return { autoReplyOn: false, maxPerConversation: Infinity }; // don't cache a transient failure
     const j = await res.json();
     const status = {
       // AI auto-reply is "live" only when configured, the master switch
       // is on, and the inbound bot is enabled.
       autoReplyOn: !!(j?.configured && j?.is_active && j?.auto_reply_enabled),
+      maxPerConversation: Number(j?.auto_reply_max_per_conversation) || Infinity,
     };
     statusCache.set(accountId, status);
     return status;
   } catch {
-    return { autoReplyOn: false }; // don't cache
+    return { autoReplyOn: false, maxPerConversation: Infinity }; // don't cache
   }
 }
 
@@ -48,6 +53,10 @@ interface AiThreadBannerProps {
   disabled: boolean;
   /** `conversations.ai_handoff_summary` — note the bot left on handoff. */
   handoffSummary?: string | null;
+  /** `conversations.ai_reply_count` — how many times the bot has
+   *  auto-replied on this thread, checked against the account's
+   *  configured max to detect a silently-reached cap. */
+  replyCount?: number;
   /** Current assignee; when a human owns the thread the bot won't run,
    *  so the "AI active" banner is suppressed. */
   assignedAgentId?: string | null;
@@ -74,13 +83,14 @@ export function AiThreadBanner({
   conversationId,
   disabled,
   handoffSummary,
+  replyCount,
   assignedAgentId,
   currentUserId,
   onChange,
 }: AiThreadBannerProps) {
   const t = useTranslations("Inbox.aiBanner");
   const { accountId } = useAuth();
-  const [autoReplyOn, setAutoReplyOn] = useState<boolean | null>(null);
+  const [accountStatus, setAccountStatus] = useState<AiAccountStatus | null>(null);
   const [busy, setBusy] = useState(false);
   // Optimistic local mirror of the pause flag so the banner flips
   // instantly on click; re-seeds whenever the thread (or its server
@@ -91,7 +101,7 @@ export function AiThreadBanner({
   useEffect(() => {
     if (!accountId) return;
     let alive = true;
-    fetchAiAccountStatus(accountId).then((s) => alive && setAutoReplyOn(s.autoReplyOn));
+    fetchAiAccountStatus(accountId).then((s) => alive && setAccountStatus(s));
     return () => {
       alive = false;
     };
@@ -134,16 +144,35 @@ export function AiThreadBanner({
     [conversationId, currentUserId, onChange, t],
   );
 
-  // Account has no auto-reply → nothing to show. (Still loading → nothing.)
-  if (!autoReplyOn) return null;
+  // Still loading account status → nothing yet.
+  if (!accountStatus) return null;
 
-  // Paused here (a human took over, or the model handed off).
-  if (paused) {
+  // Single source of truth, shared with the server-side send gate
+  // (dispatchInboundToAiReply) — see src/lib/ai/eligibility.ts. This is
+  // what keeps this banner from claiming the bot is active when the cap
+  // has silently been reached.
+  const status = getAutoReplyStatus({
+    autoReplyEnabledForAccount: accountStatus.autoReplyOn,
+    assignedAgentId,
+    autoreplyDisabledOnConversation: paused,
+    replyCount: replyCount ?? 0,
+    maxRepliesPerConversation: accountStatus.maxPerConversation,
+  });
+
+  // Account has no auto-reply, or a human already owns this thread and
+  // was never routed here via "Take over" → nothing to show.
+  if (status === "off" || status === "human_assigned") return null;
+
+  // Paused (model handoff, or a manual pause) or capped out — both mean
+  // the bot won't reply until an agent explicitly resumes it.
+  if (status === "paused" || status === "capped") {
     return (
       <Banner tone="muted">
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-foreground">{t("pausedTitle")}</p>
-          {handoffSummary && (
+          <p className="font-medium text-foreground">
+            {status === "capped" ? t("cappedTitle") : t("pausedTitle")}
+          </p>
+          {status === "paused" && handoffSummary && (
             <p className="truncate text-muted-foreground" title={handoffSummary}>
               {handoffSummary}
             </p>
@@ -155,9 +184,6 @@ export function AiThreadBanner({
       </Banner>
     );
   }
-
-  // Active, but a human already owns it → the bot won't fire; no banner.
-  if (assignedAgentId) return null;
 
   // Active on this thread.
   return (

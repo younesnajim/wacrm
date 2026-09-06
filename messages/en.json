@@ -399,6 +399,7 @@
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
+      "cappedTitle": "AI paused — reply limit reached",
       "activeText": "AI assistant is replying automatically",
       "takeOver": "Take over",
       "resume": "Resume AI",
