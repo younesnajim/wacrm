@@ -206,10 +206,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           // further left, off-screen); in RTL (anchored right) that same
           // shift only moves it partway across, leaving roughly a third of
           // the drawer permanently visible/stuck-open regardless of the
-          // hamburger. `rtl:translate-x-full` overrides it with the mirror
-          // image (slides right, off-screen) whenever `dir="rtl"` — see the
-          // mobile Arabic sidebar-never-collapses bug this fixes.
-          open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full",
+          // hamburger. `max-lg:rtl:translate-x-full` overrides it with the
+          // mirror image (slides right, off-screen) whenever `dir="rtl"`.
+          //
+          // Scoped with `max-lg:` rather than a bare `rtl:` — a bare
+          // `rtl:translate-x-full` compiles to a plain (non-media) rule
+          // that Tailwind places AFTER `lg:translate-x-0` in the generated
+          // stylesheet, so at equal specificity it won even at desktop
+          // width, hiding the static sidebar entirely in RTL (regression:
+          // sidebar disappears on desktop). `max-lg:` puts this rule under
+          // `@media (width < 64rem)`, which cannot overlap with
+          // `lg:translate-x-0`'s `@media (min-width: 64rem)` — the two are
+          // mutually exclusive by viewport, so which one sorts later in
+          // the stylesheet no longer matters. Verified against the
+          // compiled CSS: at width ≥ 64rem this rule's media query simply
+          // doesn't match, full stop, regardless of `dir`.
+          open ? "translate-x-0" : "-translate-x-full max-lg:rtl:translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
