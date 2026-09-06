@@ -53,7 +53,16 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 start-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // Horizontal centering: `start-1/2` is logical (left:50% in LTR,
+          // right:50% in RTL), so it anchors opposite EDGES of the dialog
+          // depending on direction. `-translate-x-1/2` only re-centers the
+          // LTR case (shifts left, pulling the left-anchored edge back to
+          // center); in RTL the same physical shift moves the
+          // right-anchored edge further from center instead of back to
+          // it, landing the whole dialog roughly one width off-center.
+          // `rtl:translate-x-1/2` overrides it with the mirror-image shift
+          // whenever `dir="rtl"` — same fix shape as the sidebar drawer.
+          "fixed top-1/2 start-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}

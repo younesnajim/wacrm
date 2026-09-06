@@ -73,10 +73,21 @@ function MessageContent({
   // parent wired up no viewer, which is what makes them non-clickable.
   const openMedia = onOpenMedia ? () => onOpenMedia(message.id) : undefined;
 
+  // Every branch below that can render customer- or agent-authored text
+  // pairs `break-words` (overflow-wrap: break-word) with `break-all`
+  // (word-break: break-all). `break-words` alone — even with `min-w-0` on
+  // the ancestor bubble div fixing the flex-sizing half of this — still
+  // let a long unbroken run (e.g. a booking URL) overflow the bubble on
+  // iOS Safari: `overflow-wrap: break-word` combined with
+  // `whitespace-pre-wrap` has a known WebKit quirk where the fallback
+  // break isn't reliably inserted. `break-all` breaks at any character
+  // boundary rather than only as a last resort, which can break an
+  // ordinary long word mid-character — accepted: a clipped booking link
+  // costs a booking, an ugly break doesn't.
   switch (message.content_type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words break-all text-sm">
           {message.content_text}
         </p>
       );
@@ -90,7 +101,7 @@ function MessageContent({
             <MediaUnavailable label={t("photo")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
               {message.content_text}
             </p>
           )}
@@ -106,7 +117,7 @@ function MessageContent({
             <MediaUnavailable label={t("video")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
               {message.content_text}
             </p>
           )}
@@ -126,7 +137,7 @@ function MessageContent({
               transcript, never customer-authored text. Labeled distinctly
               so an agent doesn't mistake ASR output for a typed caption. */}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
               <span className="text-muted-foreground">{t("transcript")}: </span>
               {message.content_text}
             </p>
@@ -162,12 +173,12 @@ function MessageContent({
             {t("template")}
           </span>
           {message.content_text ? (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
               {message.content_text}
             </p>
           ) : (
             message.template_name && (
-              <p className="mt-1 break-words text-sm italic opacity-80">
+              <p className="mt-1 break-words break-all text-sm italic opacity-80">
                 {message.template_name}
               </p>
             )
@@ -203,14 +214,14 @@ function MessageContent({
               <CornerDownLeft className="h-3 w-3" />
               {t("buttonReply")}
             </span>
-            <p className="whitespace-pre-wrap break-words text-sm">
+            <p className="whitespace-pre-wrap break-words break-all text-sm">
               {message.content_text || t("interactiveReply")}
             </p>
           </div>
         );
       }
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words break-all text-sm">
           {message.content_text || t("interactiveReply")}
         </p>
       );
@@ -218,7 +229,7 @@ function MessageContent({
 
     default:
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words break-all text-sm">
           {message.content_text || t("unsupported")}
         </p>
       );
