@@ -29,7 +29,11 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
         data-slot="radio-group-indicator"
         className="flex size-4 items-center justify-center"
       >
-        <span className="absolute top-1/2 start-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground" />
+        {/* Same centering-trick mismatch as dialog.tsx: `start-1/2` is
+         *  logical (anchors the opposite physical edge in RTL) but
+         *  `-translate-x-1/2` is physical, so `rtl:translate-x-1/2`
+         *  supplies the mirror-image shift needed to re-center in RTL. */}
+        <span className="absolute top-1/2 start-1/2 size-2 -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-foreground" />
       </RadioPrimitive.Indicator>
     </RadioPrimitive.Root>
   )

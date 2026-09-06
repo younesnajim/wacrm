@@ -27,7 +27,15 @@ function Switch({
         data-slot="switch-thumb"
         className={cn(
           "pointer-events-none block h-4 w-4 rounded-full bg-card shadow-sm ring-0 transition-transform",
-          "data-[checked]:translate-x-4 data-[unchecked]:translate-x-0",
+          // The thumb's rest position isn't set by a logical CSS property
+          // at all — it comes from the track's plain `flex` row, whose
+          // main-axis start is already direction-aware natively (right in
+          // RTL, no class needed). But `data-[checked]:translate-x-4` is a
+          // hardcoded physical shift: in RTL the thumb already rests on
+          // the right, so shifting further +4 pushes it off the track
+          // instead of across it. `rtl:data-[checked]:-translate-x-4`
+          // supplies the mirror-image shift.
+          "data-[checked]:translate-x-4 rtl:data-[checked]:-translate-x-4 data-[unchecked]:translate-x-0",
         )}
       />
     </SwitchPrimitive.Root>

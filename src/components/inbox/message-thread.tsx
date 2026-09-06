@@ -927,8 +927,18 @@ export function MessageThread({
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">{contact.phone}</p>
+            {/* `text-overflow: ellipsis` truncates relative to the
+             *  CONTAINER's direction, not the content's own script — on
+             *  the inherited dir="rtl" page, an unmarked Latin/numeric
+             *  string was truncating from the wrong end (e.g. "Rasha
+             *  Burhan" / a phone number showing only "an" / "...7").
+             *  `dir="auto"` on the name lets the browser detect each
+             *  contact's own script (Latin or Arabic) rather than
+             *  hardcoding one; the phone is always LTR/numeric, and
+             *  digits are bidi-weak so `auto` isn't reliable there —
+             *  `dir="ltr"` is the deterministic choice. */}
+            <h2 dir="auto" className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
+            <p dir="ltr" className="truncate text-xs text-muted-foreground">{contact.phone}</p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
               the name + back arrow keep their room. */}
