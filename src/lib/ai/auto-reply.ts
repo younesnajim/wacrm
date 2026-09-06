@@ -4,7 +4,7 @@ import { buildConversationContext } from './context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
-import { buildHandoffSummary } from './handoff'
+import { buildHandoffFields } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
@@ -145,16 +145,19 @@ export async function dispatchInboundToAiReply(
       // this thread and hand it to a human. We (a) pause the bot here
       // (sticky until re-enabled), (b) route the conversation to the
       // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
-      // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
-      const summary = buildHandoffSummary({
+      // and (c) leave structured facts so whoever picks it up has
+      // context, rendered/localized by AiThreadBanner at view time
+      // rather than baked into a stored English sentence (migration
+      // 049 — see handoff.ts for why). Assigning fires the
+      // `on_conversation_assigned` trigger, which notifies the agent.
+      const { replyCount, lastMessage } = buildHandoffFields({
         messages,
         replyCount: conv.ai_reply_count ?? 0,
       })
       const update: Record<string, unknown> = {
         ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
+        ai_handoff_reply_count: replyCount,
+        ai_handoff_last_message: lastMessage,
       }
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.

@@ -80,7 +80,13 @@ export async function POST(request: Request, { params }: Params) {
       // can't be used to bypass the per-conversation cap at scale — it's
       // a human choosing to re-engage the assistant.
       update.ai_reply_count = 0
+      // Clear both the legacy prose note and the structured fields
+      // (migration 049) that replaced it — a conversation resumed and
+      // later handed off again must not show a stale note from the
+      // handoff before this one.
       update.ai_handoff_summary = null
+      update.ai_handoff_reply_count = null
+      update.ai_handoff_last_message = null
     }
 
     const { error: upErr } = await supabase

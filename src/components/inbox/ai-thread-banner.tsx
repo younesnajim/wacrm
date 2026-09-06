@@ -51,7 +51,17 @@ interface AiThreadBannerProps {
   conversationId: string;
   /** `conversations.ai_autoreply_disabled` — bot paused on this thread. */
   disabled: boolean;
-  /** `conversations.ai_handoff_summary` — note the bot left on handoff. */
+  /** `conversations.ai_handoff_reply_count` / `ai_handoff_last_message`
+   *  (migration 049) — structured handoff facts, formatted through the
+   *  message catalogue below so the note renders correctly regardless
+   *  of the viewer's locale. Preferred over `handoffSummary` whenever
+   *  present. */
+  handoffReplyCount?: number | null;
+  handoffLastMessage?: string | null;
+  /** `conversations.ai_handoff_summary` — legacy pre-formatted English
+   *  note (migration 029/033). Only rendered as a fallback, for a
+   *  handoff written before migration 049 whose structured fields are
+   *  null — see src/lib/ai/handoff.ts for why it was replaced. */
   handoffSummary?: string | null;
   /** `conversations.ai_reply_count` — how many times the bot has
    *  auto-replied on this thread, checked against the account's
@@ -82,6 +92,8 @@ interface AiThreadBannerProps {
 export function AiThreadBanner({
   conversationId,
   disabled,
+  handoffReplyCount,
+  handoffLastMessage,
   handoffSummary,
   replyCount,
   assignedAgentId,
@@ -166,15 +178,36 @@ export function AiThreadBanner({
   // Paused (model handoff, or a manual pause) or capped out — both mean
   // the bot won't reply until an agent explicitly resumes it.
   if (status === "paused" || status === "capped") {
+    // Structured fields (migration 049) take priority — they format
+    // through the catalogue below with correct plural rules for the
+    // viewer's own locale. `handoffReplyCount` is only ever set when the
+    // bot itself produced this pause (a handoff); a manual "Take over"
+    // has no note at all, structured or legacy. Falls back to the
+    // legacy pre-formatted string for a handoff written before this
+    // migration shipped.
+    const handoffNote =
+      status === "paused" && handoffReplyCount != null
+        ? [
+            t("handoffNote", { count: handoffReplyCount }),
+            handoffLastMessage
+              ? t("handoffLastMessage", { message: handoffLastMessage })
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : status === "paused"
+          ? (handoffSummary ?? null)
+          : null;
+
     return (
       <Banner tone="muted">
         <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">
             {status === "capped" ? t("cappedTitle") : t("pausedTitle")}
           </p>
-          {status === "paused" && handoffSummary && (
-            <p className="truncate text-muted-foreground" title={handoffSummary}>
-              {handoffSummary}
+          {handoffNote && (
+            <p className="truncate text-muted-foreground" title={handoffNote}>
+              {handoffNote}
             </p>
           )}
         </div>

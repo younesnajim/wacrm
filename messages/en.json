@@ -402,6 +402,8 @@
       "pausedTitle": "AI assistant is paused here",
       "cappedTitle": "AI paused — reply limit reached",
       "activeText": "AI assistant is replying automatically",
+      "handoffNote": "{count, plural, =0 {🤖 AI agent handed off without replying.} one {🤖 AI agent handed off after # reply.} other {🤖 AI agent handed off after # replies.}}",
+      "handoffLastMessage": "Last customer message: “{message}”",
       "takeOver": "Take over",
       "resume": "Resume AI",
       "tookOver": "You’ve taken over this chat.",

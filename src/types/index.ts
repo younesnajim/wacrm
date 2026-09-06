@@ -170,16 +170,24 @@ export interface Conversation {
   updated_at: string;
   contact?: Contact;
   /**
-   * AI auto-reply state for this thread (migration 029 + 033):
+   * AI auto-reply state for this thread (migration 029 + 033 + 049):
    *  - `ai_autoreply_disabled` — the bot is paused here (a human took
    *    over, or the model handed off). Sticky until re-enabled.
    *  - `ai_reply_count` — how many times the bot has auto-replied,
    *    checked against the account's per-conversation cap.
-   *  - `ai_handoff_summary` — short internal note the bot wrote when it
-   *    handed off, shown to whoever takes the thread over.
+   *  - `ai_handoff_reply_count` / `ai_handoff_last_message` — structured
+   *    handoff facts (migration 049), formatted/localized by
+   *    `AiThreadBanner` at render time. `ai_handoff_last_message` is
+   *    the customer's own words (a quote), not UI copy.
+   *  - `ai_handoff_summary` — legacy pre-formatted English note, no
+   *    longer written by new handoffs. Only present on conversations
+   *    handed off before migration 049; the banner falls back to
+   *    rendering it verbatim when the structured fields are null.
    */
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
+  ai_handoff_reply_count?: number | null;
+  ai_handoff_last_message?: string | null;
   ai_handoff_summary?: string | null;
 }
 

@@ -402,6 +402,8 @@
       "pausedTitle": "이 대화에서 AI 어시스턴트가 일시 중지됨",
       "cappedTitle": "AI 어시스턴트 일시 중지됨 — 응답 한도에 도달했습니다",
       "activeText": "AI 어시스턴트가 자동으로 응답 중입니다",
+      "handoffNote": "{count, plural, =0 {🤖 AI 상담원이 응답 없이 전달했습니다.} other {🤖 AI 상담원이 답장 #회 후 전달했습니다.}}",
+      "handoffLastMessage": "마지막 고객 메시지: 「{message}」",
       "takeOver": "직접 처리",
       "resume": "AI 재개",
       "tookOver": "이 대화를 직접 처리하기 시작했습니다.",
