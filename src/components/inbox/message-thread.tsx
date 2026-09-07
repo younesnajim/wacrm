@@ -28,6 +28,7 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Circle,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -926,7 +927,7 @@ export function MessageThread({
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
             {displayName.charAt(0).toUpperCase()}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-24">
             {/* `text-overflow: ellipsis` truncates relative to the
              *  CONTAINER's direction, not the content's own script — on
              *  the inherited dir="rtl" page, an unmarked Latin/numeric
@@ -936,7 +937,22 @@ export function MessageThread({
              *  contact's own script (Latin or Arabic) rather than
              *  hardcoding one; the phone is always LTR/numeric, and
              *  digits are bidi-weak so `auto` isn't reliable there —
-             *  `dir="ltr"` is the deterministic choice. */}
+             *  `dir="ltr"` is the deterministic choice.
+             *
+             *  `min-w-24` (96px, replacing plain `min-w-0`): this is the
+             *  only shrinkable element in the header row — the avatar
+             *  and back button are `flex-shrink-0`, and the right-hand
+             *  refresh/status/assign controls floor at their own
+             *  (un-min-w'd) content width — so without an explicit
+             *  floor, all header-width pressure lands entirely on this
+             *  block, down to a couple of characters ("Ra…" / "9…") on
+             *  a narrow phone. Measured via Playwright at 390px: "Rasha
+             *  Burhan" needs 87px and the header has ~140-164px to
+             *  spare here once the Status label is gated below `sm:`
+             *  (see the Status dropdown below), so 96px guarantees a
+             *  name like that never truncates while leaving comfortable
+             *  room for the rest of the row; longer names still
+             *  truncate sensibly beyond the floor. */}
             <h2 dir="auto" className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
             <p dir="ltr" className="truncate text-xs text-muted-foreground">{contact.phone}</p>
           </div>
@@ -1006,14 +1022,23 @@ export function MessageThread({
 
           {/* Status — interactive dropdown for agent+, a plain
               read-only badge for viewer (see canModifyConversation
-              above). */}
+              above). Text label hidden below `sm:` (same treatment as
+              Assign below it) — unlike Assign, this had no icon to fall
+              back on, so a status dot fills that role: it also keeps
+              the color-coding (open/pending/closed) visible when the
+              word itself is hidden. Freeing this label's width is what
+              gives the name/phone block (see its `min-w-24` comment
+              above) enough room on a narrow phone. */}
           {canModifyConversation ? (
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
                     "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
                     currentStatus?.color ?? "text-muted-foreground"
                   )}>
-                  {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+                  <Circle className="h-2 w-2 fill-current" />
+                  <span className="hidden sm:inline">
+                    {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+                  </span>
                   <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1034,11 +1059,14 @@ export function MessageThread({
           ) : (
             <span
               className={cn(
-                "inline-flex items-center justify-center h-7 px-2 text-xs",
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs",
                 currentStatus?.color ?? "text-muted-foreground"
               )}
             >
-              {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+              <Circle className="h-2 w-2 fill-current" />
+              <span className="hidden sm:inline">
+                {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+              </span>
             </span>
           )}
 
