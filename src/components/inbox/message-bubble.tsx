@@ -74,20 +74,27 @@ function MessageContent({
   const openMedia = onOpenMedia ? () => onOpenMedia(message.id) : undefined;
 
   // Every branch below that can render customer- or agent-authored text
-  // pairs `break-words` (overflow-wrap: break-word) with `break-all`
-  // (word-break: break-all). `break-words` alone — even with `min-w-0` on
-  // the ancestor bubble div fixing the flex-sizing half of this — still
-  // let a long unbroken run (e.g. a booking URL) overflow the bubble on
-  // iOS Safari: `overflow-wrap: break-word` combined with
-  // `whitespace-pre-wrap` has a known WebKit quirk where the fallback
-  // break isn't reliably inserted. `break-all` breaks at any character
-  // boundary rather than only as a last resort, which can break an
-  // ordinary long word mid-character — accepted: a clipped booking link
-  // costs a booking, an ugly break doesn't.
+  // uses `wrap-anywhere` (overflow-wrap: anywhere). Plain `break-words`
+  // (overflow-wrap: break-word) — even with `min-w-0` on the ancestor
+  // bubble div fixing the flex-sizing half of this — still let a long
+  // unbroken run (e.g. a booking URL) overflow the bubble on iOS Safari:
+  // `overflow-wrap: break-word` combined with `whitespace-pre-wrap` has a
+  // known WebKit quirk where the fallback break isn't reliably inserted.
+  // `break-all` (word-break: break-all) fixed that, but breaks at ANY
+  // character boundary rather than only as a last resort, which reads
+  // badly on ordinary Arabic words — Arabic's letter-joining means a
+  // mid-word break disconnects letterforms that are supposed to visually
+  // connect, which is more jarring than the equivalent break in Latin
+  // script. `overflow-wrap: anywhere` still only breaks as a last resort
+  // (so ordinary words wrap normally in both scripts) while — unlike
+  // `break-word` — it DOES count toward the box's automatic minimum size
+  // the same way `break-all` did, so a long URL still can't force the
+  // bubble past its `max-w-[75%]` cap. Verified against a long URL in
+  // both languages.
   switch (message.content_type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words break-all text-sm">
+        <p className="whitespace-pre-wrap wrap-anywhere text-sm">
           {message.content_text}
         </p>
       );
@@ -101,7 +108,7 @@ function MessageContent({
             <MediaUnavailable label={t("photo")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
+            <p className="mt-1 whitespace-pre-wrap wrap-anywhere text-sm">
               {message.content_text}
             </p>
           )}
@@ -117,7 +124,7 @@ function MessageContent({
             <MediaUnavailable label={t("video")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
+            <p className="mt-1 whitespace-pre-wrap wrap-anywhere text-sm">
               {message.content_text}
             </p>
           )}
@@ -137,7 +144,7 @@ function MessageContent({
               transcript, never customer-authored text. Labeled distinctly
               so an agent doesn't mistake ASR output for a typed caption. */}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
+            <p className="mt-1 whitespace-pre-wrap wrap-anywhere text-sm">
               <span className="text-muted-foreground">{t("transcript")}: </span>
               {message.content_text}
             </p>
@@ -173,12 +180,12 @@ function MessageContent({
             {t("template")}
           </span>
           {message.content_text ? (
-            <p className="mt-1 whitespace-pre-wrap break-words break-all text-sm">
+            <p className="mt-1 whitespace-pre-wrap wrap-anywhere text-sm">
               {message.content_text}
             </p>
           ) : (
             message.template_name && (
-              <p className="mt-1 break-words break-all text-sm italic opacity-80">
+              <p className="mt-1 wrap-anywhere text-sm italic opacity-80">
                 {message.template_name}
               </p>
             )
@@ -214,14 +221,14 @@ function MessageContent({
               <CornerDownLeft className="h-3 w-3" />
               {t("buttonReply")}
             </span>
-            <p className="whitespace-pre-wrap break-words break-all text-sm">
+            <p className="whitespace-pre-wrap wrap-anywhere text-sm">
               {message.content_text || t("interactiveReply")}
             </p>
           </div>
         );
       }
       return (
-        <p className="whitespace-pre-wrap break-words break-all text-sm">
+        <p className="whitespace-pre-wrap wrap-anywhere text-sm">
           {message.content_text || t("interactiveReply")}
         </p>
       );
@@ -229,7 +236,7 @@ function MessageContent({
 
     default:
       return (
-        <p className="whitespace-pre-wrap break-words break-all text-sm">
+        <p className="whitespace-pre-wrap wrap-anywhere text-sm">
           {message.content_text || t("unsupported")}
         </p>
       );
