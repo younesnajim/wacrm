@@ -69,3 +69,10 @@ jobs:
       # just the absence of an error.
       - name: Verify the resulting schema
         run: supabase db query --local --file supabase/ci/verify-schema.sql
+
+      # record_message_billing() (052) has no TypeScript caller yet —
+      # the webhook wiring is deferred to step 3 — so this is the only
+      # place its timezone / free-tier / rate logic gets exercised
+      # before it ships. See the file's own header for what it checks.
+      - name: Verify message billing
+        run: supabase db query --local --file supabase/ci/verify-message-billing.sql
