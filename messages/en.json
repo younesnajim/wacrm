@@ -1654,6 +1654,28 @@
       "step4_5": "Subscribe to \"messages\" webhook field",
       "metaDocs": "Meta WhatsApp API Documentation"
     },
+    "whatsappBilling": {
+      "title": "Message costs",
+      "description": "What your WhatsApp conversations have cost this month, in AED.",
+      "loadFailed": "Could not load message costs",
+      "emptyTitle": "Cost tracking starts 1 October 2026",
+      "emptyDesc": "Meta's per-message pricing data isn't available yet. This card switches to live numbers automatically once it starts flowing in — no action needed.",
+      "monthToDate": "Month to date",
+      "projectedMonthEnd": "Projected month-end",
+      "freeTierLabel": "Free tier",
+      "freeTierUsed": "{used} of {limit} free service messages used",
+      "breakdownTitle": "By category",
+      "categoryHeader": "Category",
+      "countHeader": "Messages",
+      "costHeader": "Cost",
+      "free": "Free",
+      "category": {
+        "marketing": "Marketing",
+        "service": "Service",
+        "utility": "Utility",
+        "authentication": "Authentication"
+      }
+    },
     "sections": {
       "overview": "Overview",
       "profile": "Your profile",

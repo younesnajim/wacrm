@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { SettingsPanelHead } from './settings-panel-head';
+import { WhatsAppBillingCard } from './whatsapp-billing';
 import {
   Accordion,
   AccordionItem,
@@ -915,6 +916,10 @@ export function WhatsAppConfig() {
           </CardContent>
         </Card>
       </div>
+    </div>
+
+    <div className="mt-6">
+      <WhatsAppBillingCard />
     </div>
     </section>
   );

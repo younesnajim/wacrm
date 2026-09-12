@@ -1654,6 +1654,28 @@
       "step4_5": "\"messages\" 웹훅 필드를 구독",
       "metaDocs": "Meta WhatsApp API 문서"
     },
+    "whatsappBilling": {
+      "title": "메시지 비용",
+      "description": "이번 달 WhatsApp 대화에 든 비용입니다 (AED 기준).",
+      "loadFailed": "메시지 비용을 불러오지 못했습니다",
+      "emptyTitle": "비용 추적은 2026년 10월 1일부터 시작됩니다",
+      "emptyDesc": "메타의 메시지별 요금 데이터가 아직 제공되지 않습니다. 데이터가 들어오기 시작하면 이 카드는 자동으로 실제 수치로 전환됩니다 — 별도 조치가 필요 없습니다.",
+      "monthToDate": "이번 달 누계",
+      "projectedMonthEnd": "월말 예상액",
+      "freeTierLabel": "무료 제공량",
+      "freeTierUsed": "무료 서비스 메시지 {limit}건 중 {used}건 사용",
+      "breakdownTitle": "카테고리별",
+      "categoryHeader": "카테고리",
+      "countHeader": "메시지 수",
+      "costHeader": "비용",
+      "free": "무료",
+      "category": {
+        "marketing": "마케팅",
+        "service": "서비스",
+        "utility": "유틸리티",
+        "authentication": "인증"
+      }
+    },
     "sections": {
       "overview": "개요",
       "profile": "내 프로필",
