@@ -29,6 +29,8 @@ const h = vi.hoisted(() => ({
     }[],
     /** Error the next storage upload resolves with, if any. */
     storageUploadError: null as { message: string } | null,
+    /** Rows inserted into `webhook_raw_log` (WEBHOOK_RAW_LOG=1 capture). */
+    rawLogInserts: [] as { body: unknown }[],
   },
 }))
 
@@ -134,6 +136,13 @@ vi.mock('@supabase/supabase-js', () => ({
                     error: null,
                   }),
               }
+            },
+          }
+        case 'webhook_raw_log':
+          return {
+            insert: (row: { body: unknown }) => {
+              h.state.rawLogInserts.push(row)
+              return Promise.resolve({ error: null })
             },
           }
         default:
@@ -260,6 +269,8 @@ beforeEach(() => {
   h.state.mirrorInboundMedia = true
   h.state.storageUploads = []
   h.state.storageUploadError = null
+  h.state.rawLogInserts = []
+  delete process.env.WEBHOOK_RAW_LOG
   mockGetMediaUrl.mockResolvedValue({
     url: 'https://lookaside.fbsbx.com/whatsapp/abc',
     mimeType: 'image/jpeg',
@@ -607,5 +618,44 @@ describe('inbound webhook: an active automation does not block the AI unless it 
     expect(h.dispatchInboundToAiReply).toHaveBeenCalledWith(
       expect.objectContaining({ automationSentReply: true }),
     )
+  })
+})
+
+describe('inbound webhook: raw payload capture (WEBHOOK_RAW_LOG, migration 050)', () => {
+  it('does not log when the env flag is unset', async () => {
+    await runWebhook()
+    expect(h.state.rawLogInserts).toHaveLength(0)
+  })
+
+  it('does not log when the env flag is not exactly "1"', async () => {
+    process.env.WEBHOOK_RAW_LOG = 'true'
+    await runWebhook()
+    expect(h.state.rawLogInserts).toHaveLength(0)
+  })
+
+  it('persists the full unparsed body when the env flag is "1"', async () => {
+    process.env.WEBHOOK_RAW_LOG = '1'
+    await runWebhook()
+    expect(h.state.rawLogInserts).toHaveLength(1)
+    expect(h.state.rawLogInserts[0].body).toMatchObject({
+      entry: [
+        {
+          changes: [
+            expect.objectContaining({
+              field: 'messages',
+              value: expect.objectContaining({
+                messages: [TEXT_MESSAGE],
+              }),
+            }),
+          ],
+        },
+      ],
+    })
+  })
+
+  it('still processes the message normally when logging is on', async () => {
+    process.env.WEBHOOK_RAW_LOG = '1'
+    await runWebhook()
+    expect(h.state.upsertCalls).toHaveLength(1)
   })
 })

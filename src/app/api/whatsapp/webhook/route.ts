@@ -36,6 +36,25 @@ function supabaseAdmin() {
   return _adminClient
 }
 
+// Temporary capture instrument for the cost-dashboard work — see
+// migration 050. Off by default; flip WEBHOOK_RAW_LOG=1 to persist the
+// full, unparsed body of every inbound delivery to `webhook_raw_log` so
+// a real `statuses[].pricing` payload can be inspected. Remove this
+// (route + migration) once that payload has been captured.
+async function logRawWebhookPayload(body: unknown) {
+  if (process.env.WEBHOOK_RAW_LOG !== '1') return
+  try {
+    const { error } = await supabaseAdmin()
+      .from('webhook_raw_log')
+      .insert({ body })
+    if (error) {
+      console.error('[webhook] raw log insert failed:', error.message)
+    }
+  } catch (err) {
+    console.error('[webhook] raw log insert threw:', err)
+  }
+}
+
 interface WhatsAppMessage {
   id: string
   from: string
@@ -217,6 +236,7 @@ export async function POST(request: Request) {
   // keeps the function alive until it resolves (within the route's
   // maxDuration).
   after(async () => {
+    await logRawWebhookPayload(body)
     try {
       await processWebhook(body)
     } catch (error) {
