@@ -1,8 +1,9 @@
 import { ImageResponse } from "next/og";
+import { BrandMarkSquare } from "@/lib/brand-mark";
 
-// Sahl Flow app icon — green ground, white rounded-square bubble, سهل
-// only (no FLOW line — illegible at favicon size). Matches the
-// reversed logo mark in `src/components/logo.tsx`.
+// Sahl Flow app icon — green ground, white bubble (tail included),
+// سهل only (no FLOW line — illegible at favicon size). Geometry lives
+// in src/lib/brand-mark.tsx, shared with apple-icon.tsx.
 //
 // Satori (next/og's renderer) can't parse WOFF2 — see the font-loading
 // comment in `src/app/layout.tsx` for the woff2 story — so this route
@@ -21,48 +22,8 @@ export default async function Icon() {
     new URL("./fonts/Tajawal-ExtraBold.ttf", import.meta.url),
   ).then((res) => res.arrayBuffer());
 
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#128C4A",
-          borderRadius: 6,
-        }}
-      >
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 6,
-            background: "#FFFFFF",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <span
-            style={{
-              display: "flex",
-              fontFamily: "Tajawal",
-              fontWeight: 800,
-              fontSize: 11,
-              lineHeight: 1,
-              color: "#128C4A",
-            }}
-          >
-            سهل
-          </span>
-        </div>
-      </div>
-    ),
-    {
-      ...size,
-      fonts: [{ name: "Tajawal", data: tajawal, weight: 800, style: "normal" }],
-    },
-  );
+  return new ImageResponse(<BrandMarkSquare size={32} groundRadius={6} />, {
+    ...size,
+    fonts: [{ name: "Tajawal", data: tajawal, weight: 800, style: "normal" }],
+  });
 }
