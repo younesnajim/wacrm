@@ -20,39 +20,29 @@ import {
 // @vercel/turbopack-next/internal/font/google/font"). Self-hosting
 // removes the build-time network dependency entirely.
 //
-// Files were pulled from Google's own sources (not hand-picked
-// substitutes) so rendering is unchanged:
-//   - Inter: the variable-weight latin woff2 straight from
-//     fonts.gstatic.com (the same file next/font/google would have
-//     used for `subsets: ["latin"]`, no weight restriction).
-//   - Tajawal: the unsplit source TTFs from the google/fonts GitHub
-//     repo (github.com/google/fonts/tree/main/ofl/tajawal), converted
-//     to woff2, one file per weight. NOT the per-subset (arabic/latin)
-//     woff2 files fonts.gstatic.com serves — next/font/local's `src`
-//     array has no per-file `unicode-range` option, so two same-weight
-//     files there become fallback *sources* for one face (the browser
-//     uses whichever loads first for every glyph) rather than a
-//     correct script-based split. The unsplit source file sidesteps
-//     that entirely: full Arabic + Latin glyph coverage in one file
-//     per weight, exactly like Google's own subsetting would render
-//     when both scripts appear together (which they always do here —
-//     phone numbers, template variables, and URLs still show up
-//     inside Arabic UI).
-const inter = localFont({
-  src: "./fonts/Inter-latin-variable.woff2",
-  variable: "--font-sans",
-  weight: "100 900",
-  display: "swap",
-});
-
-// Arabic UI face. Loaded only for RTL locales so LTR installs don't pay
-// for the extra font files. Falls through to Inter for Latin glyphs that
-// still appear in an Arabic UI (phone numbers, template variables, URLs).
+// One family for both scripts — Tajawal, the Sahl Flow brand font,
+// used for Arabic and Latin alike (no separate Latin face; a phone
+// number or URL inside Arabic UI just renders in Tajawal's own Latin
+// glyphs). Three weights only: 400 body, 500 subheads, 800 headings.
+//
+// Files are the unsplit source TTFs from the google/fonts GitHub repo
+// (github.com/google/fonts/tree/main/ofl/tajawal), converted to
+// woff2, one file per weight — NOT the per-subset (arabic/latin)
+// woff2 files fonts.gstatic.com serves, since next/font/local's `src`
+// array has no per-file `unicode-range` option: two same-weight files
+// there would become fallback *sources* for one face (the browser
+// uses whichever loads first for every glyph) rather than a correct
+// script-based split. The unsplit source file sidesteps that
+// entirely: full Arabic + Latin glyph coverage in one file per
+// weight, exactly like Google's own subsetting would render when
+// both scripts appear together (which they always do here — phone
+// numbers, template variables, and URLs still show up inside Arabic
+// UI).
 const tajawal = localFont({
   src: [
     { path: "./fonts/Tajawal-400.woff2", weight: "400", style: "normal" },
     { path: "./fonts/Tajawal-500.woff2", weight: "500", style: "normal" },
-    { path: "./fonts/Tajawal-700.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/Tajawal-800.woff2", weight: "800", style: "normal" },
   ],
   variable: "--font-sans",
   display: "swap",
@@ -116,14 +106,13 @@ export default async function RootLayout({
   const locale = await getLocale();
   const messages = await getMessages();
   const dir = getDirection(locale);
-  const font = dir === "rtl" ? tajawal : inter;
 
   return (
     <html
       lang={locale}
       dir={dir}
       data-mode={DEFAULT_MODE}
-      className={`${font.variable} h-full antialiased`}
+      className={`${tajawal.variable} h-full antialiased`}
       // The `theme-boot` script below rewrites `data-mode` on <html>
       // from localStorage before React hydrates, so for a non-default
       // choice the client DOM intentionally differs from the
