@@ -8,7 +8,11 @@
  * Badge shape: bg-*-500/10 + text-*-400 + border-*-500/20. The
  * translucent fills sit fine on both light and dark surfaces; neutral
  * statuses use text-muted-foreground so the label stays legible in
- * light mode (a solid slate-400 would be too faint on white).
+ * light mode (a solid slate-400 would be too faint on white). The
+ * brand-green statuses (sent/delivered/read) are the one exception —
+ * they use the solid `bg-tint`/`text-tint-foreground` pair instead,
+ * since a translucent primary tint next to primary-colored text has
+ * poor contrast in light mode (both land pale-on-pale).
  */
 
 import type { BroadcastStatus, RecipientStatus } from "@/types";
@@ -39,7 +43,7 @@ export const broadcastStatusConfig: Record<BroadcastStatus, StatusDisplay> = {
   },
   sent: {
     label: "sent",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-tint text-tint-foreground border-primary/20",
   },
   failed: {
     label: "failed",
@@ -58,15 +62,15 @@ export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
   },
   delivered: {
     label: "delivered",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-tint text-tint-foreground border-primary/20",
   },
   read: {
     label: "read",
-    classes: "bg-primary/10 text-primary border-primary/20",
+    classes: "bg-tint text-tint-foreground border-primary/20",
   },
   replied: {
     label: "replied",
-    classes: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    classes: "bg-teal-500/10 text-teal-400 border-teal-500/20",
   },
   failed: {
     label: "failed",

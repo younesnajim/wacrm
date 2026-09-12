@@ -118,7 +118,7 @@ function LanguageCard({ code }: { code: Locale }) {
     >
       <span className="flex-1 text-sm font-semibold text-foreground">{name}</span>
       {isActive && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+        <span className="inline-flex items-center gap-1 rounded-full bg-tint px-2 py-0.5 text-[11px] font-medium text-tint-foreground">
           <Check className="h-3 w-3" />
           {t("active")}
         </span>
@@ -166,7 +166,7 @@ function ModeCard({
         {mode}
       </span>
       {isActive && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+        <span className="inline-flex items-center gap-1 rounded-full bg-tint px-2 py-0.5 text-[11px] font-medium text-tint-foreground">
           <Check className="h-3 w-3" />
           {t("active")}
         </span>

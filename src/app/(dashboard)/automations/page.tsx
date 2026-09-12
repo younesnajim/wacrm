@@ -191,7 +191,7 @@ export default function AutomationsPage() {
                   onClick={() => startFromTemplate(slug)}
                   className="group flex flex-col items-start rounded-xl border border-border bg-card p-4 text-start transition-colors hover:border-primary/50 hover:bg-card/80"
                 >
-                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">
+                  <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-tint text-tint-foreground">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="text-sm font-semibold text-foreground">{t.name}</div>

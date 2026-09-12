@@ -60,7 +60,7 @@ const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'docum
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
   Utility: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  Authentication: 'bg-amber-600/20 text-amber-400 border-amber-600/30',
+  Authentication: 'bg-amber text-amber-foreground border-amber/30',
 };
 
 interface TemplateFormData {
@@ -578,7 +578,7 @@ export function TemplateManager() {
                         onClick={() => openEdit(template)}
                         title={t('editTitle')}
                         aria-label={t('editLabel')}
-                        className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
+                        className="text-muted-foreground hover:text-tint-foreground hover:bg-tint h-8 px-2"
                       >
                         <Pencil className="size-3.5" />
                         {t('edit')}
@@ -591,7 +591,7 @@ export function TemplateManager() {
                         onClick={() => openEdit(template)}
                         title={t('resubmitTitle')}
                         aria-label={t('resubmitLabel')}
-                        className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-8 px-2"
+                        className="text-muted-foreground hover:text-tint-foreground hover:bg-tint h-8 px-2"
                       >
                         <RotateCcw className="size-3.5" />
                         {t('resubmit')}
@@ -651,7 +651,7 @@ export function TemplateManager() {
           </DialogHeader>
 
           {form.category === 'Authentication' && (
-            <div className="flex items-start gap-2 rounded border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+            <div className="flex items-start gap-2 rounded border border-amber/40 bg-amber px-3 py-2 text-xs text-amber-foreground">
               <AlertCircle className="size-4 mt-0.5 shrink-0" />
               <p>{t.rich('authWarning', { bold: (chunks) => <strong>{chunks}</strong> })}</p>
             </div>

@@ -453,7 +453,7 @@ function KindButton({
       className={cn(
         "flex-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
         active
-          ? "border-primary bg-primary/10 text-primary"
+          ? "border-primary bg-tint text-tint-foreground"
           : "border-border bg-muted text-muted-foreground hover:text-foreground",
       )}
     >

@@ -445,7 +445,7 @@ function NodeCard({
             {isEntry && (
               <Badge
                 variant="outline"
-                className="border-primary/40 bg-primary/10 text-primary text-[10px]"
+                className="border-primary/40 bg-tint text-tint-foreground text-[10px]"
               >
                 {t('badgeEntry')}
               </Badge>

@@ -443,21 +443,21 @@ export function WhatsAppConfig() {
       <div className="space-y-6">
         {/* Corrupted-token reset banner */}
         {showResetBanner && (
-          <Alert className="bg-amber-950/40 border-amber-600/40">
+          <Alert className="bg-amber border-amber/40">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="size-5 text-amber-400 mt-0.5 shrink-0" />
+              <AlertTriangle className="size-5 text-amber-foreground mt-0.5 shrink-0" />
               <div className="flex-1">
-                <AlertTitle className="text-amber-200 mb-1">
+                <AlertTitle className="text-amber-foreground mb-1">
                   Stored token can&apos;t be decrypted
                 </AlertTitle>
-                <AlertDescription className="text-amber-100/80 text-sm">
+                <AlertDescription className="text-ink/75 text-sm">
                   {statusMessage}
                 </AlertDescription>
                 <Button
                   onClick={handleReset}
                   disabled={resetting}
                   size="sm"
-                  className="mt-3 bg-amber-600 hover:bg-amber-700 text-white"
+                  className="mt-3 bg-ink hover:bg-ink/90 text-white"
                 >
                   {resetting ? (
                     <>
@@ -505,20 +505,20 @@ export function WhatsAppConfig() {
           <Alert
             className={
               isRegistered
-                ? 'bg-emerald-950/30 border-emerald-700/50'
-                : 'bg-amber-950/30 border-amber-700/50'
+                ? 'bg-tint border-primary/30'
+                : 'bg-amber border-amber/40'
             }
           >
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 {isRegistered ? (
-                  <CheckCircle2 className="size-4 text-emerald-400" />
+                  <CheckCircle2 className="size-4 text-tint-foreground" />
                 ) : (
-                  <AlertTriangle className="size-4 text-amber-400" />
+                  <AlertTriangle className="size-4 text-amber-foreground" />
                 )}
                 <AlertTitle
                   className={
-                    'mb-0 ' + (isRegistered ? 'text-emerald-200' : 'text-amber-200')
+                    'mb-0 ' + (isRegistered ? 'text-tint-foreground' : 'text-amber-foreground')
                   }
                 >
                   {isRegistered
@@ -531,7 +531,7 @@ export function WhatsAppConfig() {
                 size="sm"
                 onClick={handleVerifyRegistration}
                 disabled={verifyingRegistration}
-                className="border-border bg-transparent text-foreground hover:bg-muted h-7"
+                className="border-ink/30 bg-transparent text-ink hover:bg-ink/10 h-7"
               >
                 {verifyingRegistration ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -541,7 +541,7 @@ export function WhatsAppConfig() {
                 {t('verifyWithMeta')}
               </Button>
             </div>
-            <AlertDescription className="text-muted-foreground mt-2 text-xs leading-relaxed">
+            <AlertDescription className="text-ink/75 mt-2 text-xs leading-relaxed">
               {isRegistered ? (
                 <span
                   dangerouslySetInnerHTML={{
@@ -555,7 +555,7 @@ export function WhatsAppConfig() {
               ) : lastRegistrationError ? (
                 <>
                   {t('lastAttemptFailed')}
-                  <span className="text-red-300">
+                  <span className="text-red-700">
                     &quot;{lastRegistrationError}&quot;
                   </span>
                   . {t('retryHint')}

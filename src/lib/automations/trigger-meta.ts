@@ -21,7 +21,7 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
   },
   new_contact_created: {
     label: 'New Contact',
-    pillClass: 'border-primary/30 bg-primary/10 text-primary',
+    pillClass: 'border-primary/30 bg-tint text-tint-foreground',
   },
   conversation_assigned: {
     label: 'Conversation Assigned',
@@ -29,7 +29,7 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
   },
   tag_added: {
     label: 'Tag Added',
-    pillClass: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+    pillClass: 'border-amber/30 bg-amber text-amber-foreground',
   },
   time_based: {
     label: 'Time-Based',

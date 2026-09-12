@@ -222,7 +222,7 @@ export function ProfileForm() {
               {currentAvatar ? (
                 <AvatarImage src={currentAvatar} alt={fullName || 'Avatar'} />
               ) : null}
-              <AvatarFallback className="bg-primary/10 text-base text-primary">
+              <AvatarFallback className="bg-tint text-base text-tint-foreground">
                 {initial}
               </AvatarFallback>
             </Avatar>

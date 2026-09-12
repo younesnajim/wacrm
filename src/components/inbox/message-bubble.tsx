@@ -165,7 +165,10 @@ function MessageContent({
       // content_text (issue #483) that rendered a bubble with nothing
       // in it at all. Invert on the primary fill, and fall back to the
       // template's name when we have no stored body (legacy rows sent
-      // before the fix).
+      // before the fix). The non-agent branch sits on the neutral
+      // `bg-muted` bubble, not a primary fill — it uses the solid Tint
+      // token rather than a translucent primary tint so the chip text
+      // (Ink) keeps AA contrast regardless of mode.
       return (
         <div>
           <span
@@ -173,7 +176,7 @@ function MessageContent({
               "mb-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
               isAgent
                 ? "bg-primary-foreground/20 text-primary-foreground"
-                : "bg-primary/20 text-primary",
+                : "bg-tint text-tint-foreground",
             )}
           >
             <LayoutTemplate className="h-3 w-3" />

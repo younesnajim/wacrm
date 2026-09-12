@@ -229,7 +229,7 @@ export function TemplatePicker({
                         <p className="truncate text-sm font-medium text-popover-foreground">
                           {t.name}
                         </p>
-                        <Badge className="border border-primary/30 bg-primary/20 text-[10px] text-primary">
+                        <Badge className="border border-primary/30 bg-tint text-[10px] text-tint-foreground">
                           {t.category}
                         </Badge>
                         {t.language && (

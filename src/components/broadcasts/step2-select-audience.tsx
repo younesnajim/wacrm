@@ -288,7 +288,7 @@ export function Step2SelectAudience({
               <div
                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
                   isSelected
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-tint text-tint-foreground'
                     : 'bg-muted text-muted-foreground'
                 }`}
               >
@@ -324,7 +324,7 @@ export function Step2SelectAudience({
                     onClick={() => toggleTag(tag.id)}
                     className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                       isSelected
-                        ? 'border-primary/30 bg-primary/10 text-primary'
+                        ? 'border-primary/30 bg-tint text-tint-foreground'
                         : 'border-border bg-muted text-muted-foreground hover:border-border'
                     }`}
                   >

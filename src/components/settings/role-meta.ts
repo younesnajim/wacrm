@@ -26,13 +26,13 @@ export const ROLE_META: Record<
     icon: Crown,
     label: 'owner',
     variant: 'owner',
-    className: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+    className: 'border-amber/40 bg-amber text-amber-foreground',
   },
   admin: {
     icon: Shield,
     label: 'admin',
     variant: 'admin',
-    className: 'border-primary/40 bg-primary/10 text-primary',
+    className: 'border-primary/40 bg-tint text-tint-foreground',
   },
   agent: {
     icon: UserCog,

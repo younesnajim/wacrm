@@ -247,7 +247,7 @@ export function Step3Personalize({
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-primary" />
             <p className="text-sm font-medium text-foreground">{t('personalize.headerImage')}</p>
-            <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium uppercase text-primary">
+            <span className="inline-flex items-center rounded-md bg-tint px-2 py-0.5 text-xs font-medium uppercase text-tint-foreground">
               {mediaHeaderType}
             </span>
           </div>
@@ -302,7 +302,7 @@ export function Step3Personalize({
                 className="rounded-xl border border-border bg-card/50 p-4"
               >
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-mono font-medium text-primary">
+                  <span className="inline-flex items-center rounded-md bg-tint px-2 py-0.5 text-xs font-mono font-medium text-tint-foreground">
                     {placeholder}
                   </span>
                 </div>
@@ -421,7 +421,7 @@ export function Step3Personalize({
       </div>
 
       {unmappedKeys.length > 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="rounded-md border border-amber/30 bg-amber px-3 py-2 text-xs text-amber-foreground">
           Map every placeholder before continuing — still missing{' '}
           <span className="font-mono font-semibold">
             {unmappedKeys.join(', ')}

@@ -153,7 +153,7 @@ export default function NewBroadcastPage() {
                     isCompleted
                       ? 'bg-primary text-primary-foreground'
                       : isActive
-                        ? 'border-2 border-primary bg-primary/10 text-primary'
+                        ? 'border-2 border-primary bg-tint text-tint-foreground'
                         : 'border border-border bg-muted text-muted-foreground'
                   }`}
                 >

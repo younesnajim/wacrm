@@ -65,7 +65,7 @@ const STATUS_META: Record<
 > = {
   active: {
     label: "Active",
-    classes: "border-emerald-600/40 bg-emerald-500/10 text-emerald-300",
+    classes: "border-primary/40 bg-tint text-tint-foreground",
     icon: PlayCircle,
   },
   completed: {
@@ -75,7 +75,7 @@ const STATUS_META: Record<
   },
   handed_off: {
     label: "Handed off",
-    classes: "border-amber-600/40 bg-amber-500/10 text-amber-300",
+    classes: "border-amber/40 bg-amber text-amber-foreground",
     icon: UserPlus,
   },
   timed_out: {
