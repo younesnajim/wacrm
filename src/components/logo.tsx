@@ -11,9 +11,11 @@ interface LogoProps {
   className?: string;
 }
 
-// Below this width the FLOW wordmark stops being legible, so it's
-// dropped and سهل is rescaled to fill the bubble on its own.
-const COMPACT_BREAKPOINT = 40;
+// Below this width the FLOW wordmark stops being legible (verified by
+// rendering — at width 48 it's an illegible smear, at 60 it's small
+// but readable, at 72+ it's comfortable), so it's dropped and سهل is
+// rescaled to fill the bubble on its own.
+const COMPACT_BREAKPOINT = 60;
 
 export function Logo({ size = 32, variant = "default", className }: LogoProps) {
   const compact = size < COMPACT_BREAKPOINT;
@@ -37,10 +39,10 @@ export function Logo({ size = 32, variant = "default", className }: LogoProps) {
       {compact ? (
         <text
           x="90"
-          y="82"
+          y="88"
           textAnchor="middle"
           fontFamily="Tajawal, sans-serif"
-          fontSize="64"
+          fontSize="54"
           fontWeight="800"
           fill={sahlFill}
         >
