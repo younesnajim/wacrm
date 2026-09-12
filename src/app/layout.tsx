@@ -50,10 +50,10 @@ const tajawal = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Sahl Flow",
+    template: "%s — Sahl Flow",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  description: "Sahl Flow — a self-hostable WhatsApp CRM.",
   robots: {
     index: false,
     follow: false,
