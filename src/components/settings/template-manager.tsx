@@ -48,20 +48,14 @@ import type {
   TemplateSampleValues,
 } from '@/types';
 import { templateStatusConfig } from '@/lib/template-status';
+import { TEMPLATE_CATEGORIES, templateCategoryClass } from '@/lib/template-category';
 import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
 
-const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
 const HEADER_FORMATS: HeaderFormat[] = ['none', 'text', 'image', 'video', 'document'];
-
-const categoryColors: Record<string, string> = {
-  Marketing: 'bg-purple-600/20 text-purple-400 border-purple-600/30',
-  Utility: 'bg-blue-600/20 text-blue-400 border-blue-600/30',
-  Authentication: 'bg-amber text-amber-foreground border-amber/30',
-};
 
 interface TemplateFormData {
   name: string;
@@ -526,7 +520,7 @@ export function TemplateManager() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-medium text-foreground">{template.name}</h3>
                       <Badge
-                        className={`text-xs border ${categoryColors[template.category] || ''}`}
+                        className={`text-xs border ${templateCategoryClass(template.category)}`}
                       >
                         {template.category}
                       </Badge>
@@ -690,7 +684,7 @@ export function TemplateManager() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border">
-                    {CATEGORIES.map((cat) => (
+                    {TEMPLATE_CATEGORIES.map((cat) => (
                       <SelectItem
                         key={cat}
                         value={cat}

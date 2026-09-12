@@ -17,7 +17,7 @@ export const TRIGGER_META: Record<AutomationTriggerType, TriggerMeta> = {
   },
   keyword_match: {
     label: 'Keyword Match',
-    pillClass: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
+    pillClass: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
   },
   new_contact_created: {
     label: 'New Contact',

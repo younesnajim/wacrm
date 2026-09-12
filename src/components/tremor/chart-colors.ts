@@ -1,8 +1,10 @@
 // ============================================================
-// Tremor chartColors [v0.1.0] — copied from tremorlabs/tremor.
+// Tremor chartColors [v0.1.0] — copied from tremorlabs/tremor,
+// customised for Sahl Flow (the `violet` category was swapped for
+// `sky` — no purple/violet in this app's palette).
 //
 // The Tremor charts source uses these helpers to map a category
-// name to a stable Tailwind color class (`bg-violet-500`,
+// name to a stable Tailwind color class (`bg-sky-500`,
 // `fill-blue-500`, …). Tremor's "Raw" distribution is copy-paste
 // — there is no `@tremor/raw` npm package — so the canonical
 // approach is to vendor the file unchanged and customise locally.
@@ -26,11 +28,11 @@ export const chartColors = {
     fill: "fill-emerald-500",
     text: "text-emerald-500",
   },
-  violet: {
-    bg: "bg-violet-500",
-    stroke: "stroke-violet-500",
-    fill: "fill-violet-500",
-    text: "text-violet-500",
+  sky: {
+    bg: "bg-sky-500",
+    stroke: "stroke-sky-500",
+    fill: "fill-sky-500",
+    text: "text-sky-500",
   },
   amber: {
     bg: "bg-amber-500",

@@ -6,12 +6,7 @@ import { MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Loader2, FileText, ArrowRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-
-const categoryColors: Record<string, string> = {
-  Marketing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  Utility: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  Authentication: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-};
+import { templateCategoryClass } from '@/lib/template-category';
 
 interface Step1Props {
   selectedTemplate: MessageTemplate | null;
@@ -86,7 +81,7 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((template) => {
             const isSelected = selectedTemplate?.id === template.id;
-            const catColor = categoryColors[template.category] ?? categoryColors.Utility;
+            const catColor = templateCategoryClass(template.category);
 
             return (
               <button

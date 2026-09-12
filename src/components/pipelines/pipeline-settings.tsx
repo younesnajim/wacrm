@@ -39,8 +39,8 @@ import { useTranslations } from "next-intl";
 
 const STAGE_COLORS = [
   "#3b82f6",
-  "#6366f1",
-  "#8b5cf6",
+  "#64748b",
+  "#84cc16",
   "#ec4899",
   "#f43f5e",
   "#f97316",

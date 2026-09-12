@@ -118,7 +118,7 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
           t={t}
         />
         <Metric
-          icon={<TrendingUp className="h-4 w-4 text-purple-400" />}
+          icon={<TrendingUp className="h-4 w-4 text-teal-400" />}
           label={t("weightedValue")}
           value={formatCurrency(stats.weightedValue, defaultCurrency)}
           tooltip={t("weightedValueTooltip")}

@@ -330,7 +330,7 @@ export default function BroadcastDetailPage() {
     { label: t('stats.sent'), value: broadcast.sent_count, color: 'bg-primary' },
     { label: t('stats.delivered'), value: broadcast.delivered_count, color: 'bg-teal-500' },
     { label: t('stats.read'), value: broadcast.read_count, color: 'bg-blue-500' },
-    { label: t('stats.replied'), value: broadcast.replied_count, color: 'bg-indigo-500' },
+    { label: t('stats.replied'), value: broadcast.replied_count, color: 'bg-blue-500' },
   ];
 
   return (
@@ -493,7 +493,7 @@ export default function BroadcastDetailPage() {
           value={broadcast.replied_count}
           total={broadcast.total_recipients}
           icon={<MessageCircle className="h-4 w-4" />}
-          color="bg-indigo-500/10 text-indigo-400"
+          color="bg-blue-500/10 text-blue-400"
         />
         <StatCard
           label={t('stats.failed')}
