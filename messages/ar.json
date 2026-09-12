@@ -1363,7 +1363,7 @@
       "manageTemplates": "إدارة قوالب الرسائل",
       "pendingReview": "{count} في انتظار المراجعة",
       "tagsAndFields": "الوسوم والحقول المخصصة",
-      "appearance": "الوضع {mode} · النغمة {theme}",
+      "appearance": "الوضع {mode}",
       "yourAccount": "حسابك",
       "loading": "جارٍ التحميل…",
       "membersCount": "{count} {count, plural, =1 {عضو} other {أعضاء}}",
@@ -1736,12 +1736,10 @@
     },
     "appearance": {
       "title": "المظهر",
-      "description": "حدد الوضع ولون التمييز المستخدم في التطبيق. سيتم حفظه في هذا الجهاز - جربه، سيتغير مباشرة.",
+      "description": "حدد الوضع المستخدم في التطبيق. سيتم حفظه في هذا الجهاز - جربه، سيتغير مباشرة.",
       "mode": "الوضع",
       "useMode": "استخدم وضع {mode}",
       "active": "نشط",
-      "accentColor": "لون التمييز",
-      "useTheme": "استخدم نمط {name}",
       "language": "اللغة",
       "useLanguage": "استخدم {name}"
     },

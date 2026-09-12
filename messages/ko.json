@@ -1368,7 +1368,7 @@
       "tagsAndFields": "태그 및 커스텀 필드",
       "tagsCount": "태그 {count}개",
       "fieldsCount": "커스텀 필드 {count}개",
-      "appearance": "{mode} 모드 · {theme} 색상",
+      "appearance": "{mode} 모드",
       "yourAccount": "내 계정",
       "loading": "불러오는 중…"
     },
@@ -1748,12 +1748,10 @@
     },
     "appearance": {
       "title": "화면 설정",
-      "description": "앱 전체에서 사용할 모드와 강조 색상을 설정합니다. 이 기기에 저장되며, 바로 적용되니 자유롭게 시도해보세요.",
+      "description": "앱 전체에서 사용할 모드를 설정합니다. 이 기기에 저장되며, 바로 적용되니 자유롭게 시도해보세요.",
       "mode": "모드",
       "useMode": "{mode} 모드 사용",
       "active": "사용 중",
-      "accentColor": "강조 색상",
-      "useTheme": "{name} 테마 사용",
       "language": "언어",
       "useLanguage": "{name} 사용"
     },

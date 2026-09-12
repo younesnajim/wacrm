@@ -39,15 +39,21 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  /* Secondary card surface (tile / hover backgrounds) and the accent
-   * extras the Settings redesign leans on. The raw --primary-* vars
-   * already exist per-accent below; these mappings expose them (and
-   * --card-2) as Tailwind utilities: bg-card-2, bg-primary-soft,
-   * bg-primary-soft-2, hover:bg-primary-hover. */
+  /* Secondary card surface (tile / hover backgrounds) and the brand
+   * extras (Tint, Amber, Ink, plus the --primary-* soft/hover
+   * variants) exposed as Tailwind utilities: bg-card-2,
+   * bg-primary-soft, bg-primary-soft-2, hover:bg-primary-hover,
+   * bg-tint, text-tint-foreground, bg-amber, text-amber-foreground,
+   * text-ink. Values live in the MODE / BRAND blocks below. */
   --color-card-2: var(--card-2);
   --color-primary-hover: var(--primary-hover);
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-2: var(--primary-soft-2);
+  --color-tint: var(--tint);
+  --color-tint-foreground: var(--tint-foreground);
+  --color-amber: var(--amber);
+  --color-amber-foreground: var(--amber-foreground);
+  --color-ink: var(--ink);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -58,31 +64,47 @@
 }
 
 /* ============================================================
- * THEMING — two orthogonal dimensions
+ * THEMING — Sahl Flow brand, one fixed palette
  *
- *   1. MODE   (light / dark)  → neutral surfaces. Selected with
- *      `document.documentElement.dataset.mode`. Defaults to dark.
- *   2. ACCENT (violet / …)    → the primary color only. Selected
- *      with `document.documentElement.dataset.theme`.
+ * Only one dimension left: MODE (light / dark) → neutral surfaces
+ * and which of the two brand greens stands in as "primary" for
+ * that mode. Selected with `document.documentElement.dataset.mode`
+ * (defaults to dark). There is no accent picker any more — this
+ * app is Sahl Flow, not a template a client re-skins.
  *
- * The two compose: any accent works in either mode. Neutral
- * tokens (background / card / border / muted / sidebar surfaces /
- * neutral charts / radius) live in the MODE blocks below; accent
- * tokens (--primary*, --ring, --chart-1, --sidebar-primary*,
- * --sidebar-ring) live in the ACCENT blocks. They set disjoint
- * variables, so cascade order between them doesn't matter.
+ * Brand tokens, fixed regardless of mode:
+ *   --ink     #0E1A14 — the app's primary text color; also the
+ *             foreground paired with the two light brand colors
+ *             (Tint, Amber) since white text fails contrast on them.
+ *   --tint    #A8E6C3 — solid fill for active backgrounds, badges,
+ *             selected rows. Pairs with --tint-foreground (Ink).
+ *   --amber   #E8B54A — warnings, overdue, free-tier alerts. Pairs
+ *             with --amber-foreground (Ink). The only warning color
+ *             in the app — do not reintroduce a second amber.
  *
- * `:root` carries the dark-mode + violet defaults so a visitor
- * renders correctly before JS runs; the boot script in
- * layout.tsx replays the saved mode + accent before first paint.
+ * Mode-dependent brand tokens (in the MODE blocks below):
+ *   Dark mode uses Light (#2BBF6A) as --primary — it pops against
+ *   near-black surfaces better than the darker Primary green, which
+ *   becomes --primary-hover instead. Light mode is the reverse:
+ *   Primary (#128C4A) is --primary, Light (#2BBF6A) is the hover.
+ *   Each mode's --primary-foreground is whichever of white/Ink
+ *   actually contrasts against that mode's --primary.
  *
- * The three `--primary-*` extras (hover / soft / soft-2) feed
- * hovered primary buttons and tinted-primary surfaces (sidebar
- * active pill, validation badges).
- *
- * Token shapes come straight from the design handoff at
- * project/Color Themes.html — change one, change the other.
+ * The `--primary-*` extras (hover / soft / soft-2) feed hovered
+ * primary buttons and tinted-primary surfaces (sidebar active pill,
+ * validation badges). soft/soft-2 are derived with color-mix so
+ * they always track --primary without duplicating values per mode.
  * ============================================================ */
+
+/* ---- BRAND: fixed Sahl Flow tokens (mode-independent) ---- */
+
+:root {
+  --ink: #0e1a14;
+  --tint: #a8e6c3;
+  --tint-foreground: var(--ink);
+  --amber: #e8b54a;
+  --amber-foreground: var(--ink);
+}
 
 /* ---- MODE: neutral surfaces ---- */
 
@@ -114,11 +136,26 @@ html[data-mode="dark"] {
   --sidebar-accent: oklch(0.22 0.01 260);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.28 0.01 260);
+
+  /* Dark mode stands in Light (#2BBF6A) as the accent — it reads
+     better against near-black surfaces than the darker Primary,
+     which becomes the hover instead. Ink text keeps buttons legible
+     since white-on-Light-green fails contrast. */
+  --primary: #2bbf6a;
+  --primary-foreground: var(--ink);
+  --primary-hover: #128c4a;
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --primary-soft-2: color-mix(in srgb, var(--primary) 20%, transparent);
+  --ring: #2bbf6a;
+  --chart-1: #2bbf6a;
+  --sidebar-primary: #2bbf6a;
+  --sidebar-primary-foreground: var(--ink);
+  --sidebar-ring: #2bbf6a;
 }
 
 html[data-mode="light"] {
   --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
+  --foreground: var(--ink);
   --card: oklch(1 0 0);
   --card-2: oklch(0.985 0.002 260);
   --card-foreground: oklch(0.21 0.01 260);
@@ -143,78 +180,19 @@ html[data-mode="light"] {
   --sidebar-accent: oklch(0.96 0.004 260);
   --sidebar-accent-foreground: oklch(0.25 0.01 260);
   --sidebar-border: oklch(0.922 0.004 260);
-}
 
-/* ---- ACCENT: primary color ---- */
-
-:root,
-html[data-theme="violet"] {
-  --primary: oklch(0.526 0.247 293);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.6 0.22 293);
-  --primary-soft: oklch(0.526 0.247 293 / 0.12);
-  --primary-soft-2: oklch(0.526 0.247 293 / 0.2);
-  --ring: oklch(0.526 0.247 293);
-  --chart-1: oklch(0.526 0.247 293);
-  --sidebar-primary: oklch(0.526 0.247 293);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.526 0.247 293);
-}
-
-html[data-theme="emerald"] {
-  --primary: oklch(0.62 0.16 162);
-  --primary-foreground: oklch(0.16 0.02 162);
-  --primary-hover: oklch(0.68 0.15 162);
-  --primary-soft: oklch(0.62 0.16 162 / 0.12);
-  --primary-soft-2: oklch(0.62 0.16 162 / 0.22);
-  --ring: oklch(0.62 0.16 162);
-  --chart-1: oklch(0.62 0.16 162);
-  --chart-2: oklch(0.7 0.14 195);
-  --sidebar-primary: oklch(0.62 0.16 162);
-  --sidebar-primary-foreground: oklch(0.16 0.02 162);
-  --sidebar-ring: oklch(0.62 0.16 162);
-}
-
-html[data-theme="cobalt"] {
-  --primary: oklch(0.585 0.2 254);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.66 0.18 254);
-  --primary-soft: oklch(0.585 0.2 254 / 0.12);
-  --primary-soft-2: oklch(0.585 0.2 254 / 0.22);
-  --ring: oklch(0.585 0.2 254);
-  --chart-1: oklch(0.585 0.2 254);
-  --chart-2: oklch(0.7 0.15 220);
-  --sidebar-primary: oklch(0.585 0.2 254);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.585 0.2 254);
-}
-
-html[data-theme="amber"] {
-  --primary: oklch(0.745 0.16 65);
-  --primary-foreground: oklch(0.18 0.03 65);
-  --primary-hover: oklch(0.8 0.15 65);
-  --primary-soft: oklch(0.745 0.16 65 / 0.12);
-  --primary-soft-2: oklch(0.745 0.16 65 / 0.22);
-  --ring: oklch(0.745 0.16 65);
-  --chart-1: oklch(0.745 0.16 65);
-  --chart-2: oklch(0.7 0.15 35);
-  --sidebar-primary: oklch(0.745 0.16 65);
-  --sidebar-primary-foreground: oklch(0.18 0.03 65);
-  --sidebar-ring: oklch(0.745 0.16 65);
-}
-
-html[data-theme="rose"] {
-  --primary: oklch(0.645 0.22 16);
-  --primary-foreground: oklch(0.985 0 0);
-  --primary-hover: oklch(0.71 0.2 16);
-  --primary-soft: oklch(0.645 0.22 16 / 0.12);
-  --primary-soft-2: oklch(0.645 0.22 16 / 0.22);
-  --ring: oklch(0.645 0.22 16);
-  --chart-1: oklch(0.645 0.22 16);
-  --chart-2: oklch(0.7 0.18 340);
-  --sidebar-primary: oklch(0.645 0.22 16);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-ring: oklch(0.645 0.22 16);
+  /* Light mode is the "normal" reading — Primary is the accent,
+     Light is the hover. */
+  --primary: #128c4a;
+  --primary-foreground: #ffffff;
+  --primary-hover: #2bbf6a;
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --primary-soft-2: color-mix(in srgb, var(--primary) 20%, transparent);
+  --ring: #128c4a;
+  --chart-1: #128c4a;
+  --sidebar-primary: #128c4a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #128c4a;
 }
 
 @layer base {

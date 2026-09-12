@@ -1368,7 +1368,7 @@
       "tagsAndFields": "Tags and custom fields",
       "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
       "fieldsCount": "{count} custom {count, plural, =1 {field} other {fields}}",
-      "appearance": "{mode} mode · {theme} accent",
+      "appearance": "{mode} mode",
       "yourAccount": "Your account",
       "loading": "Loading…"
     },
@@ -1748,12 +1748,10 @@
     },
     "appearance": {
       "title": "Appearance",
-      "description": "Set the mode and accent colour used across the app. Saved to this device — try it, it changes live.",
+      "description": "Set the mode used across the app. Saved to this device — try it, it changes live.",
       "mode": "Mode",
       "useMode": "Use {mode} mode",
       "active": "Active",
-      "accentColor": "Accent color",
-      "useTheme": "Use {name} theme",
       "language": "Language",
       "useLanguage": "Use {name}"
     },
