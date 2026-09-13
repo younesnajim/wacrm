@@ -907,11 +907,31 @@ export function MessageThread({
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
-    <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
+    <div className={cn("flex min-w-0 flex-1 flex-col @container", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          name/avatar/dropdowns stay legible.
+
+          `@container`: the badge/status-label/assign-label reveals
+          below react to this row's own rendered width via `@[…]:`
+          variants, NOT viewport breakpoints (`sm:`/`lg:`). The thread
+          column's actual width is viewport minus the conversation
+          list (lg:w-80) and, when open, the contact sidebar (w-70) —
+          at a real desktop width like 1024px with both panels open
+          that's ~420px, well under the `sm` viewport breakpoint's
+          640px, so viewport-based classes would show content the row
+          has no room for. Confirmed the failure mode by reproducing
+          the three-column layout in a throwaway route and screenshotting
+          it with Playwright: viewport-gated labels caused the assign
+          trigger's unbounded-width name to wrap inside its fixed h-7
+          box and spill into the row above/below it; even after capping
+          that with truncate, the `sm`/`md`-sized reveal thresholds
+          still fired a few px before there was actually room, so the
+          newly-revealed element's box overlapped its neighbor right at
+          the crossover. The `@[34rem]` / `@[42rem]` thresholds below
+          are each the measured minimum content width (badge+status, and
+          then +assign) plus a ~50-70px safety margin, not round numbers. */}
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 @[34rem]:px-4">
+        <div className="flex min-w-0 items-center gap-2 @[34rem]:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
           {onBack && (
@@ -948,29 +968,31 @@ export function MessageThread({
              *  block, down to a couple of characters ("Ra…" / "9…") on
              *  a narrow phone. Measured via Playwright at 390px: "Rasha
              *  Burhan" needs 87px and the header has ~140-164px to
-             *  spare here once the Status label is gated below `sm:`
-             *  (see the Status dropdown below), so 96px guarantees a
-             *  name like that never truncates while leaving comfortable
-             *  room for the rest of the row; longer names still
-             *  truncate sensibly beyond the floor. */}
+             *  spare here once the Status label is hidden below the
+             *  `@[34rem]` container threshold (see the Status dropdown
+             *  below), so 96px guarantees a name like that never
+             *  truncates while leaving comfortable room for the rest
+             *  of the row; longer names still truncate sensibly beyond
+             *  the floor. */}
             <h2 dir="auto" className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
             <p dir="ltr" className="truncate text-xs text-muted-foreground">{contact.phone}</p>
           </div>
-          {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. */}
+          {/* Session timer badge — hidden until the row actually has
+              room (see the @container comment above), so the name +
+              back arrow keep their room on a narrow phone. */}
           <Badge
             variant="outline"
             className={cn(
-              "ms-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ms-2",
+              "ms-1 hidden shrink-0 gap-1 whitespace-nowrap border-border text-[10px] @[34rem]:inline-flex @[34rem]:ms-2",
               sessionInfo.expired ? "text-red-400" : "text-primary"
             )}
           >
-            <Clock className="h-3 w-3" />
+            <Clock className="h-3 w-3 shrink-0" />
             {sessionInfo.remaining}
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
@@ -986,7 +1008,7 @@ export function MessageThread({
               title={contactPanelOpen ? t("hideContact") : t("showContact")}
               aria-pressed={contactPanelOpen}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                "hidden h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
                 contactPanelOpen ? "text-primary" : "text-muted-foreground",
               )}
             >
@@ -1011,35 +1033,37 @@ export function MessageThread({
               aria-label={t("refreshConversation")}
               title={t("refresh")}
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+                "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
               )}
             >
               <RefreshCw
-                className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+                className={cn("h-3.5 w-3.5 shrink-0", isRefreshing && "animate-spin")}
               />
             </button>
           )}
 
           {/* Status — interactive dropdown for agent+, a plain
               read-only badge for viewer (see canModifyConversation
-              above). Text label hidden below `sm:` (same treatment as
-              Assign below it) — unlike Assign, this had no icon to fall
-              back on, so a status dot fills that role: it also keeps
-              the color-coding (open/pending/closed) visible when the
-              word itself is hidden. Freeing this label's width is what
-              gives the name/phone block (see its `min-w-24` comment
-              above) enough room on a narrow phone. */}
+              above). Text label hidden until the row has room (same
+              @container treatment as Assign below it, see the comment
+              on the header row) — unlike Assign, this had no icon to
+              fall back on, so a status dot fills that role: it also
+              keeps the color-coding (open/pending/closed) visible when
+              the word itself is hidden. `max-w-20 truncate` caps the
+              label so a long localized status word can't wrap inside
+              the h-7 trigger and spill into the row above/below it —
+              same failure mode Assign had with an agent's full name. */}
           {canModifyConversation ? (
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(
-                    "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                    "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-xs hover:bg-muted",
                     currentStatus?.color ?? "text-muted-foreground"
                   )}>
-                  <Circle className="h-2 w-2 fill-current" />
-                  <span className="hidden sm:inline">
+                  <Circle className="h-2 w-2 shrink-0 fill-current" />
+                  <span className="hidden max-w-20 truncate whitespace-nowrap @[34rem]:inline">
                     {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
                   </span>
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="h-3 w-3 shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
@@ -1059,29 +1083,38 @@ export function MessageThread({
           ) : (
             <span
               className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs",
+                "inline-flex h-7 shrink-0 items-center justify-center gap-1 px-2 text-xs",
                 currentStatus?.color ?? "text-muted-foreground"
               )}
             >
-              <Circle className="h-2 w-2 fill-current" />
-              <span className="hidden sm:inline">
+              <Circle className="h-2 w-2 shrink-0 fill-current" />
+              <span className="hidden max-w-20 truncate whitespace-nowrap @[34rem]:inline">
                 {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
               </span>
             </span>
           )}
 
-          {/* Assign — same split as status above. */}
+          {/* Assign — same split as status above, but its label has no
+              short fallback word (an agent's name can be long), so it
+              waits for more room (`@[42rem]`) than the badge/status and
+              is capped with `max-w-28 truncate` — without that cap a
+              long name wrapped inside the h-7 trigger and spilled into
+              the row above/below it (the original bug report: this
+              collided visually with the countdown badge and refresh
+              icon at real desktop widths once the conversation list +
+              contact sidebar left the thread column only ~400-500px
+              wide). */}
           {canModifyConversation ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                  "inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-xs hover:bg-muted",
                   assignedAgentId ? "text-primary" : "text-muted-foreground"
                 )}
               >
-                <UserPlus className="h-3 w-3" />
-                <span className="hidden sm:inline">{assignLabel}</span>
-                <ChevronDown className="h-3 w-3" />
+                <UserPlus className="h-3 w-3 shrink-0" />
+                <span className="hidden max-w-28 truncate whitespace-nowrap @[42rem]:inline">{assignLabel}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
