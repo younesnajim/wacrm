@@ -113,12 +113,18 @@ function Donut({ data, currency }: { data: PipelineDonutData; currency: string }
             strokeLinecap="butt"
           />
         ))}
-        {/* center label */}
+        {/* center label. This SVG is fixed-size (h-48/w-48 = 192px
+            against a 200-unit viewBox, ~0.96 scale always, regardless
+            of container width — unlike conversations-chart.tsx this
+            box never stretches), so `max-sm:text-[13px]` isn't
+            chasing a moving scale factor, just that same ~0.96: 13
+            renders at ~12.5px real, comfortably past the 12px floor
+            rather than hugging it at 12 (~11.5px real). */}
         <text
           x={cx}
           y={cy - 6}
           textAnchor="middle"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-[11px] max-sm:text-[13px]"
         >
           {t('total')}
         </text>

@@ -22,6 +22,21 @@ interface ConversationsChartProps {
 // via CSS (preserveAspectRatio default). Everything inside uses
 // viewBox coordinates so the drawing math stays simple even as the
 // container resizes.
+//
+// The box itself must keep this exact aspect ratio (`aspect-[19/6]`
+// on the <svg>, 760:240 reduces to 19:6) rather than a fixed height —
+// a fixed height let the rendered box's aspect ratio drift from the
+// viewBox's own on any container that isn't exactly 760px wide (every
+// container, in practice: narrower on mobile, and dashboard cards are
+// rarely exactly 760px on desktop either). "meet" then scaled the
+// whole chart down to fit and letterboxed the leftover space instead
+// of filling the box — real dead space in the card, and every viewBox
+// unit (including axis-label font sizes below) rendering smaller than
+// its literal value on any narrower container. Locking the box to the
+// viewBox's ratio makes scaleX always equal scaleY, so the chart
+// exactly fills its box at any width with no wasted space — verified
+// by rendering the pre-fix version at a mobile width and measuring
+// the letterboxed gap directly, not by reasoning about the box model.
 // ------------------------------------------------------------
 const VB_W = 760
 const VB_H = 240
@@ -76,7 +91,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
 
       <div className="p-5">
         {loading || !data ? (
-          <Skeleton className="h-[240px] w-full" />
+          <Skeleton className="aspect-[19/6] w-full" />
         ) : data.every((p) => p.incoming === 0 && p.outgoing === 0) ? (
           <EmptyState
             icon={MessageSquare}
@@ -134,14 +149,17 @@ function LineSvg({
   const incomingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.incoming)}`).join(' ')
   const outgoingPath = data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i)},${yFor(p.outgoing)}`).join(' ')
 
-  // Mouse-move: use the SVG's current screen-CTM to map clientX
-  // back to viewBox coordinates. The previous rect-based math
-  // assumed the viewBox filled the SVG DOM box linearly, but
-  // `preserveAspectRatio="xMidYMid meet"` (the SVG default)
-  // letterboxes the content horizontally when the container is
-  // wider than the viewBox aspect — so hover snapped hundreds of
-  // pixels off on wide layouts. CTM-inverse correctly accounts for
-  // letterboxing, scaling, and any future transform changes.
+  // Mouse-move: use the SVG's current screen-CTM to map clientX back
+  // to viewBox coordinates. The previous rect-based math assumed the
+  // viewBox filled the SVG DOM box linearly, but `preserveAspectRatio
+  // ="xMidYMid meet"` (the SVG default) letterboxed the content
+  // whenever the box's aspect ratio didn't exactly match the
+  // viewBox's — so hover snapped hundreds of pixels off. The box is
+  // now locked to the viewBox's own ratio (see the VB_W/VB_H comment
+  // above), which removes the letterboxing this was originally
+  // written for — kept anyway since CTM-inverse is the generally
+  // correct way to map screen coordinates through whatever transform
+  // is actually in effect, not a fix tied to one specific bug.
   useEffect(() => {
     const svg = svgRef.current
     const wrap = wrapRef.current
@@ -198,11 +216,26 @@ function LineSvg({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VB_W} ${VB_H}`}
-        className="h-[240px] w-full"
+        className="aspect-[19/6] w-full"
         role="img"
         aria-label={t('ariaLabel')}
       >
-        {/* Y-axis gridlines + labels */}
+        {/* Y-axis gridlines + labels.
+            `max-sm:text-[30px]` isn't a typo for a Tailwind step — SVG
+            <text> font-size is in viewBox *user units*, which the
+            aspect-ratio-locked box above scales by (rendered width /
+            760) to reach real screen pixels (see the VB_W comment).
+            At a phone's realistic card width (~300-360px after page +
+            card padding) that scale is ~0.40-0.47, so a real 12px
+            minimum needs ~26-30 user units, not "12". 30 was picked by
+            actually rendering this exact box (padding included) at
+            375-430px and reading the computed font-size back — it
+            lands ~12px at the narrowest common phone and a couple of
+            px over on larger ones, never under. There's no value that
+            hits exactly 12px on every width with a static viewBox;
+            that would need the SVG's coordinate system to track the
+            container's real measured size instead of staying fixed
+            at 760 (a bigger change than this pass makes). */}
         {ticks.map((t) => {
           const y = yFor(t)
           return (
@@ -220,7 +253,7 @@ function LineSvg({
                 y={y}
                 textAnchor="end"
                 dominantBaseline="middle"
-                className="fill-muted-foreground text-[10px]"
+                className="fill-muted-foreground text-[10px] max-sm:text-[30px]"
               >
                 {t}
               </text>
@@ -285,7 +318,7 @@ function LineSvg({
           letterboxed viewBox percentage. */}
       {hovered && hover !== null && (
         <div
-          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-2.5 py-1.5 text-[11px] shadow-lg"
+          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-2.5 py-1.5 text-[11px] max-sm:text-[12px] shadow-lg"
           style={{ left: `${hover.tooltipLeftPx}px` }}
         >
           <div className="font-medium text-popover-foreground">{longDayLabel(hovered.day)}</div>

@@ -206,3 +206,33 @@ html[data-mode="light"] {
     @apply font-sans;
   }
 }
+
+/* ============================================================
+ * MOBILE TYPE SCALE — raises the two smallest steps of Tailwind's
+ * default scale below the `sm` breakpoint (640px) only. Desktop is
+ * untouched: this only fires under the media query.
+ *
+ * Every `.text-sm`/`.text-xs` utility Tailwind generates compiles to
+ * `font-size: var(--text-sm)` / `var(--text-xs)` — these are the
+ * SAME two variables the whole app already draws from (nav items,
+ * dashboard card titles/labels, conversation-list previews, table
+ * cells, form labels, …), so overriding them here is a single lever
+ * for all of that at once, not a per-component sweep. `--text-base`
+ * is already 16px and needs no change.
+ *
+ * Only the font-size half is overridden — each corresponding
+ * `--text-*--line-height` is a unitless multiplier (e.g. `calc(1.25
+ * / .875)`), so it auto-recomputes against whichever font-size is
+ * actually in effect; touching it here would be redundant.
+ *
+ * Does NOT reach text sized with an arbitrary value (`text-[11px]`)
+ * — those bypass this scale entirely by design (Tailwind compiles
+ * them to a literal `font-size:11px`, no variable). Two dashboard
+ * chart files use exactly that for axis/legend text; each carries
+ * its own `max-sm:` override next to the base class instead. */
+@media (max-width: 639px) {
+  :root {
+    --text-xs: 0.8125rem; /* 13px, up from Tailwind's 12px default */
+    --text-sm: 0.9375rem; /* 15px, up from Tailwind's 14px default */
+  }
+}
