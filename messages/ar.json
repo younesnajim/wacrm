@@ -419,6 +419,7 @@
       "subtitleZero": "إدارة قائمة جهات الاتصال الخاصة بك.",
       "customFieldsBtn": "حقول مخصصة",
       "importBtn": "استيراد",
+      "exportBtn": "تصدير",
       "addContactBtn": "إضافة جهة اتصال",
       "searchPlaceholder": "ابحث بالاسم، الهاتف، أو البريد الإلكتروني...",
       "filterByTags": "تصفية حسب الوسوم",
@@ -454,7 +455,10 @@
       "toastFailedDelete": "فشل في حذف جهة الاتصال",
       "toastDeleted": "تم حذف جهة الاتصال",
       "toastBulkFailedDelete": "فشل في حذف جهات الاتصال",
-      "toastBulkDeleted": "تم حذف {count} من جهات الاتصال"
+      "toastBulkDeleted": "تم حذف {count} من جهات الاتصال",
+      "toastNoContactsToExport": "لا توجد جهات اتصال للتصدير",
+      "toastExported": "تم تصدير {count} من جهات الاتصال",
+      "toastFailedExport": "فشل في تصدير جهات الاتصال"
     },
     "form": {
       "addTitle": "إضافة جهة اتصال",

@@ -39,6 +39,7 @@ import {
   Search,
   Plus,
   Upload,
+  Download,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -54,9 +55,20 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
+import {
+  buildContactsCsv,
+  contactsExportFilename,
+  type ExportableContactRow,
+} from '@/lib/contacts/export-contacts-csv';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
+
+/** Batch size for paging through the full filtered set on export —
+ *  independent of PAGE_SIZE (the on-screen table page), since export
+ *  needs every matching row, not just the current page. Also the
+ *  chunk size for `contact_tags` lookups, to keep `.in()` URLs short. */
+const EXPORT_BATCH = 500;
 
 const PAGE_SIZE = 25;
 
@@ -85,6 +97,7 @@ export default function ContactsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
@@ -208,6 +221,109 @@ export default function ContactsPage() {
     setContacts(enriched);
     setLoading(false);
   }, [supabase, page, search, selectedTagIds, tagsMap, t]);
+
+  // Export respects the same search + tag filters as the table, but
+  // pages through EVERY matching row (not just PAGE_SIZE) — "what's on
+  // screen" means the filters, not the current page. Reuses the same
+  // two query paths as fetchContacts (the tag-filter RPC vs. the plain
+  // ilike search) so the two can't drift on what counts as a match.
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const term = search.trim();
+      const allRows: Contact[] = [];
+
+      if (selectedTagIds.length > 0) {
+        let offset = 0;
+        for (;;) {
+          const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
+            p_tag_ids: selectedTagIds,
+            p_search: term || null,
+            p_limit: EXPORT_BATCH,
+            p_offset: offset,
+          });
+          if (error) throw error;
+          const rows = (data ?? []) as { contact: Contact; total_count: number }[];
+          allRows.push(...rows.map((r) => r.contact));
+          if (rows.length < EXPORT_BATCH) break;
+          offset += EXPORT_BATCH;
+        }
+      } else {
+        let offset = 0;
+        for (;;) {
+          let query = supabase
+            .from('contacts')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(offset, offset + EXPORT_BATCH - 1);
+
+          if (term) {
+            const like = `%${term}%`;
+            query = query.or(
+              `name.ilike.${like},phone.ilike.${like},email.ilike.${like}`,
+            );
+          }
+
+          const { data, error } = await query;
+          if (error) throw error;
+          allRows.push(...(data ?? []));
+          if (!data || data.length < EXPORT_BATCH) break;
+          offset += EXPORT_BATCH;
+        }
+      }
+
+      if (allRows.length === 0) {
+        toast.error(t('toastNoContactsToExport'));
+        return;
+      }
+
+      // Resolve tag names for every exported contact. tagsMap already
+      // holds every tag on the account (fetchTags has no filter), so
+      // this only needs the contact -> tag_id join, chunked to keep
+      // the `.in()` list bounded for very large exports.
+      const tagsByContact: Record<string, string[]> = {};
+      for (let i = 0; i < allRows.length; i += EXPORT_BATCH) {
+        const idsChunk = allRows.slice(i, i + EXPORT_BATCH).map((c) => c.id);
+        const { data: contactTags, error } = await supabase
+          .from('contact_tags')
+          .select('contact_id, tag_id')
+          .in('contact_id', idsChunk);
+        if (error) throw error;
+        contactTags?.forEach((ct) => {
+          const tag = tagsMap[ct.tag_id];
+          if (!tag) return;
+          (tagsByContact[ct.contact_id] ??= []).push(tag.name);
+        });
+      }
+
+      const exportRows: ExportableContactRow[] = allRows.map((c) => ({
+        name: c.name,
+        phone: c.phone,
+        email: c.email,
+        company: c.company,
+        tagNames: tagsByContact[c.id] ?? [],
+        created_at: c.created_at,
+      }));
+
+      const csv = buildContactsCsv(exportRows);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = contactsExportFilename();
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(t('toastExported', { count: allRows.length }));
+    } catch (err) {
+      console.error('Contact export failed:', err);
+      toast.error(t('toastFailedExport'));
+    } finally {
+      setExporting(false);
+    }
+  }, [supabase, search, selectedTagIds, tagsMap, t]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
@@ -369,6 +485,21 @@ export default function ContactsPage() {
           >
             <Upload className="size-4" />
             {t('importBtn')}
+          </GatedButton>
+          <GatedButton
+            variant="outline"
+            canAct={canEdit}
+            gateReason="export contacts"
+            onClick={handleExport}
+            disabled={exporting}
+            className="border-border text-muted-foreground hover:bg-muted"
+          >
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {t('exportBtn')}
           </GatedButton>
           <GatedButton
             canAct={canEdit}
