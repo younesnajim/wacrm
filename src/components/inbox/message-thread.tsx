@@ -248,7 +248,7 @@ export function MessageThread({
       .reverse()
       .find((m) => m.sender_type === "customer");
 
-    if (!lastCustomerMsg) return { expired: true, remaining: "No customer messages" };
+    if (!lastCustomerMsg) return { expired: true, remaining: tTimer("noCustomerMessages") };
 
     const hoursSince = differenceInHours(new Date(), new Date(lastCustomerMsg.created_at));
     const expired = hoursSince >= 24;
@@ -914,24 +914,77 @@ export function MessageThread({
           `@container`: the badge/status-label/assign-label reveals
           below react to this row's own rendered width via `@[…]:`
           variants, NOT viewport breakpoints (`sm:`/`lg:`). The thread
-          column's actual width is viewport minus the conversation
-          list (lg:w-80) and, when open, the contact sidebar (w-70) —
-          at a real desktop width like 1024px with both panels open
-          that's ~420px, well under the `sm` viewport breakpoint's
-          640px, so viewport-based classes would show content the row
-          has no room for. Confirmed the failure mode by reproducing
-          the three-column layout in a throwaway route and screenshotting
-          it with Playwright: viewport-gated labels caused the assign
-          trigger's unbounded-width name to wrap inside its fixed h-7
-          box and spill into the row above/below it; even after capping
-          that with truncate, the `sm`/`md`-sized reveal thresholds
-          still fired a few px before there was actually room, so the
-          newly-revealed element's box overlapped its neighbor right at
-          the crossover. The `@[34rem]` / `@[42rem]` thresholds below
-          are each the measured minimum content width (badge+status, and
-          then +assign) plus a ~50-70px safety margin, not round numbers. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 @[34rem]:px-4">
-        <div className="flex min-w-0 items-center gap-2 @[34rem]:gap-3">
+          column's actual width is viewport minus ALL of: this app's
+          own nav sidebar (sidebar.tsx: lg:w-60 = 240px), the
+          conversation list (lg:w-80 = 320px), and, when open, the
+          contact sidebar (w-70 = 280px) — 840px of chrome. At 1280px
+          that leaves only ~440px, well under the `sm` viewport
+          breakpoint's 640px, so viewport-based classes would show
+          content the row has no room for. (First pass at this fix
+          forgot the nav sidebar and only subtracted list+contact
+          panel — looked fine in isolation, still broke in the real
+          app. Re-verified against the full 840px budget before
+          trusting the thresholds below.)
+
+          Confirmed the failure mode by reproducing the full four-
+          column layout (nav + list + thread + contact panel) in a
+          throwaway route and screenshotting it with Playwright at the
+          exact crossover pixels, across every `sessionInfo.remaining`
+          shape (countdown, "Expired", "No customer messages" and its
+          ar/ko translations — the last is the widest and has no
+          bearing on countdown-state testing alone), both directions,
+          and short/unusually-long contact + agent names. The
+          `@[34rem]` / `@[42rem]` thresholds are each the measured
+          minimum content width (badge+status, then +assign) plus a
+          ~50-70px margin, not round numbers — and every text piece
+          that can vary in length (badge, status label, assign label)
+          is now `truncate`-capped so the measurement can't be
+          invalidated by a longer value than what was tested.
+
+          `overflow-x-auto` + no `justify-between` + `flex-1` (not
+          `min-w-0`) on the left group: a safety net for when there's
+          no width small enough to fit even the ALWAYS-visible content
+          (avatar, name floor, refresh, status dot, assign icon,
+          contact-panel toggle) — right at the very bottom of the `lg`
+          breakpoint (1024px, both panels open) the thread column is
+          only ~184px, too narrow for icons alone. Two bugs had to go
+          together to fix this cleanly, both pre-existing (not
+          introduced by the @container work, just never reachable
+          before every right-side element was made `shrink-0`):
+            1. The row used `justify-between` with two independently-
+               shrinking groups. Once the right group alone (all
+               `shrink-0`) is wider than the container, `justify-
+               between` computes the right group's start position as
+               (container width − right group width) — negative — so
+               it renders starting to the LEFT of the container's own
+               edge, overlapping the left group. `overflow-x-auto`
+               alone can't fix this: it only catches overflow to the
+               right, not a child positioned into negative space.
+            2. The left group had `min-w-0` on itself — correct for
+               letting the THREAD COLUMN shrink without forcing the
+               3-column layout wider (that one, on the component root,
+               stays), wrong here: `min-w-0` tells flexbox this group
+               may shrink to zero from the OUTSIDE, but doesn't stop
+               ITS OWN children (avatar `shrink-0`, name's own 96px
+               floor) from overflowing a parent that's shrunk smaller
+               than they need. The group visually collapsed to 0 and
+               its children spilled out through it — landing exactly
+               on top of the (rigid, `shrink-0`) right group.
+          Fix: normal flex order (no `justify-between`) with `flex-1`
+          on the left group instead of `min-w-0`, so it keeps its own
+          true minimum (avatar + the name's explicit floor — text
+          itself still shrinks via `truncate`'s overflow:hidden, which
+          zeroes a flex item's *content* minimum without zeroing the
+          *group's*). When totals still don't fit (1024px), the whole
+          row overflows leftmost-to-rightmost with nothing out of
+          place, and `overflow-x-auto` makes that scrollable instead
+          of clipped. This is a pre-existing limit of the page's own
+          3-column breakpoint (inbox/page.tsx switches to 3 columns at
+          `lg`, 1024px, with no narrower fallback for the contact panel
+          specifically) — flagging rather than silently deciding the
+          contact panel should auto-close there. */}
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card px-3 py-3 @[34rem]:px-4">
+        <div className="flex flex-1 items-center gap-2 @[34rem]:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
           {onBack && (
@@ -979,16 +1032,20 @@ export function MessageThread({
           </div>
           {/* Session timer badge — hidden until the row actually has
               room (see the @container comment above), so the name +
-              back arrow keep their room on a narrow phone. */}
+              back arrow keep their room on a narrow phone. `remaining`
+              isn't always short ("No customer messages" / its ar/ko
+              translations) — capped with `max-w-32 truncate` like the
+              Status/Assign labels so a long value can't blow the width
+              budget the @container thresholds were measured against. */}
           <Badge
             variant="outline"
             className={cn(
-              "ms-1 hidden shrink-0 gap-1 whitespace-nowrap border-border text-[10px] @[34rem]:inline-flex @[34rem]:ms-2",
+              "ms-1 hidden shrink-0 gap-1 border-border text-[10px] @[34rem]:inline-flex @[34rem]:ms-2",
               sessionInfo.expired ? "text-red-400" : "text-primary"
             )}
           >
             <Clock className="h-3 w-3 shrink-0" />
-            {sessionInfo.remaining}
+            <span className="max-w-32 truncate whitespace-nowrap">{sessionInfo.remaining}</span>
           </Badge>
         </div>
 
